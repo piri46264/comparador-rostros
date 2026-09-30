@@ -61,7 +61,19 @@
     </section>
 
     <section class="controles">
-      <div class="umbral">
+      <div class="modo" role="radiogroup" aria-label="Modo de decisión">
+        <span class="modo-titulo">Modo de decisión</span>
+        <div class="segmentado">
+          <label><input type="radio" name="modo" value="auto" checked><span>Automático <small>recomendado</small></span></label>
+          <label><input type="radio" name="modo" value="manual"><span>Manual</span></label>
+        </div>
+      </div>
+      <div class="umbral" id="panel-auto">
+        <b>Umbral automático según la calidad de las fotos</b>
+        <small>El programa mide la calidad de cada foto (resolución, nitidez, iluminación, pose, expresión…) y ajusta las zonas de decisión: con fotos de mala calidad se amplía la franja "no concluyente" y hace falta más similitud para concluir. Informa el grado de certeza y la probabilidad de error.</small>
+        <small id="estado-calibracion" class="estado-calibracion"></small>
+      </div>
+      <div class="umbral" id="panel-manual" hidden>
         <label for="umbral">Umbral de coincidencia: <b id="umbral-valor">60 %</b></label>
         <input id="umbral" type="range" min="40" max="90" step="1" value="60">
         <small>Porcentaje mínimo de similitud global para concluir que es la misma persona. Súbelo para ser más estricto.</small>
@@ -79,7 +91,7 @@
             <circle cx="60" cy="60" r="52" class="medidor-fondo"/>
             <circle cx="60" cy="60" r="52" class="medidor-valor" id="medidor-arco"/>
           </svg>
-          <div class="medidor-texto"><b id="porcentaje">0%</b><small>similitud</small></div>
+          <div class="medidor-texto"><b id="porcentaje">0%</b><small id="medidor-etiqueta">similitud</small></div>
         </div>
         <div class="veredicto-caja">
           <p id="veredicto" class="veredicto"></p>
@@ -93,6 +105,9 @@
         </div>
       </div>
 
+      <div id="bloque-certeza" class="bloque-certeza"></div>
+
+      <h3>Componentes de la similitud</h3>
       <div class="componentes" id="componentes"></div>
 
       <div class="rostros-analizados" id="rostros-analizados"></div>
@@ -105,6 +120,22 @@
         </table>
       </div>
     </section>
+
+    <details class="calibracion" id="seccion-calibracion">
+      <summary>Calibración con casos propios <small>(avanzado, opcional)</small></summary>
+      <div class="calibracion-cuerpo">
+        <p>Para máxima precisión, puedes calibrar el modo automático con fotografías de <b>identidad conocida</b> parecidas a las que sueles comparar (mismo tipo de cámara, iluminación, antigüedad…). El programa mide cómo se distribuyen las distancias entre fotos de la misma persona y entre personas distintas, y recalcula los umbrales y las tasas de error.</p>
+        <p><b>Cómo nombrar los archivos:</b> una subcarpeta por persona (<code>perez/foto1.jpg</code>, <code>perez/foto2.jpg</code>…) o un prefijo antes de un guion bajo (<code>perez_1.jpg</code>, <code>perez_2.jpg</code>, <code>soto_1.jpg</code>…). Se necesitan al menos 2 fotos de cada persona y 2 personas; lo ideal es 10 personas o más, con 3–5 fotos cada una.</p>
+        <div class="acciones">
+          <label class="btn"><input type="file" id="cal-archivos" accept="image/*" multiple hidden>Elegir fotos…</label>
+          <label class="btn"><input type="file" id="cal-carpeta" webkitdirectory multiple hidden>Elegir carpeta…</label>
+          <button id="btn-calibrar" class="btn primario" disabled>Calibrar</button>
+          <button id="btn-borrar-cal" class="btn">Volver al modelo base</button>
+        </div>
+        <div id="cal-estado" class="cal-estado"></div>
+        <div id="cal-resultado"></div>
+      </div>
+    </details>
 
     <p class="descargo">Herramienta orientativa: el resultado es probabilístico y no reemplaza un peritaje de identificación facial.</p>
   </main>
@@ -131,6 +162,7 @@
   <script src="modelos/face_expression_model.js"></script>
   <script src="js/modelos.js"></script>
   <script src="js/analisis.js"></script>
+  <script src="js/certeza.js"></script>
   <script src="js/reporte.js"></script>
   <script src="js/app.js"></script>
 </body>

@@ -6,7 +6,8 @@
   const CORRECCION_ROLL_MIN = 3;     // grados de inclinación a partir de los cuales se endereza el rostro
   const OPCIONES_SSD = () => new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35, maxResults: 20 });
 
-  const PESOS_GLOBALES = { descriptor: 0.70, geometria: 0.25, demografia: 0.05 };
+  // Pesos basados en la capacidad discriminante medida (EER descriptor ≈ 0,2 %; geometría ≈ 40 %)
+  const PESOS_GLOBALES = { descriptor: 0.80, geometria: 0.15, demografia: 0.05 };
 
   /* ------------------------------------------------------------------ */
   /* Utilidades geométricas                                              */
@@ -89,6 +90,36 @@
       .withAgeAndGender()
       .withFaceExpressions();
     return resultados.sort((a, b) => b.detection.box.area - a.detection.box.area);
+  }
+
+  /**
+   * Detección con respaldo: si no se encuentra ningún rostro (típico de fotos muy recortadas,
+   * tipo carné, o muy pequeñas), se agrega un margen alrededor y se amplía la imagen antes de
+   * reintentar. Si funciona, la imagen de trabajo se reemplaza por la versión con margen.
+   */
+  async function detectarConRespaldo(imagen) {
+    let rostros = await detectarRostros(imagen.canvas);
+    if (rostros.length) return rostros;
+    const c0 = imagen.canvas;
+    const margen = 0.4;
+    const ampl = Math.max(1, 480 / Math.min(c0.width, c0.height));
+    const w = Math.round(c0.width * (1 + 2 * margen) * ampl), h = Math.round(c0.height * (1 + 2 * margen) * ampl);
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    // Fondo: la propia imagen muy ampliada y desenfocada (evita bordes artificiales)
+    ctx.filter = 'blur(12px)';
+    ctx.drawImage(c0, 0, 0, w, h);
+    ctx.filter = 'none';
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(c0, c0.width * margen * ampl, c0.height * margen * ampl, c0.width * ampl, c0.height * ampl);
+    rostros = await detectarRostros(c);
+    if (rostros.length) {
+      imagen.canvas = c;
+      imagen.escala = imagen.escala * ampl;
+      imagen.conMargen = true;
+    }
+    return rostros;
   }
 
   function ojos(puntos) {
@@ -345,7 +376,88 @@
   /* ------------------------------------------------------------------ */
   const EXPRESIONES = { neutral: 'Neutral', happy: 'Alegría', sad: 'Tristeza', angry: 'Enojo', fearful: 'Miedo', disgusted: 'Desagrado', surprised: 'Sorpresa' };
 
-  async function analizarRostro(imagen, deteccion) {
+  /* ------------------------------------------------------------------ */
+  /* Aumentación en tiempo de prueba (TTA)                               */
+  /* ------------------------------------------------------------------ */
+  function recortarRostro(lienzo, caja, factor = 1.8) {
+    const lado = Math.round(Math.max(caja.width, caja.height) * factor);
+    const c = document.createElement('canvas');
+    c.width = c.height = Math.max(lado, 160);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, c.width, c.height);
+    const x0 = caja.x + caja.width / 2 - lado / 2, y0 = caja.y + caja.height / 2 - lado / 2;
+    ctx.drawImage(lienzo, x0, y0, lado, lado, 0, 0, c.width, c.height);
+    return c;
+  }
+
+  function voltear(c) {
+    const v = document.createElement('canvas');
+    v.width = c.width; v.height = c.height;
+    const ctx = v.getContext('2d');
+    ctx.translate(c.width, 0); ctx.scale(-1, 1);
+    ctx.drawImage(c, 0, 0);
+    return v;
+  }
+
+  // Ecualización de histograma de la luminancia: compensa iluminación pobre o dispareja
+  function ecualizar(c) {
+    const v = document.createElement('canvas');
+    v.width = c.width; v.height = c.height;
+    const ctx = v.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(c, 0, 0);
+    const im = ctx.getImageData(0, 0, v.width, v.height);
+    const d = im.data, n = d.length / 4;
+    const hist = new Uint32Array(256), lum = new Uint8Array(n);
+    for (let i = 0; i < n; i++) { lum[i] = Math.round(0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]); hist[lum[i]]++; }
+    const cdf = new Float32Array(256);
+    let acum = 0;
+    for (let i = 0; i < 256; i++) { acum += hist[i]; cdf[i] = acum / n; }
+    for (let i = 0; i < n; i++) {
+      const y = lum[i] || 1, nuevo = cdf[lum[i]] * 255, f = nuevo / y;
+      d[i * 4] = Math.min(255, d[i * 4] * f); d[i * 4 + 1] = Math.min(255, d[i * 4 + 1] * f); d[i * 4 + 2] = Math.min(255, d[i * 4 + 2] * f);
+    }
+    ctx.putImageData(im, 0, 0);
+    return v;
+  }
+
+  async function descriptoresAumentados(lienzo, resultado) {
+    const base = recortarRostro(lienzo, resultado.detection.box);
+    const eq = ecualizar(base);
+    const variantes = [voltear(base), eq, voltear(eq)];
+    const lista = [resultado.descriptor];
+    for (const v of variantes) {
+      const r = await faceapi.detectSingleFace(v, OPCIONES_SSD()).withFaceLandmarks().withFaceDescriptor();
+      if (r) lista.push(r.descriptor);
+    }
+    const promedio = new Float32Array(lista[0].length);
+    for (const d of lista) for (let i = 0; i < d.length; i++) promedio[i] += d[i] / lista.length;
+    return { promedio, lista };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Puntaje de calidad (inspirado en ISO/IEC 29794-5 y 19794-5)         */
+  /* ------------------------------------------------------------------ */
+  function evaluarCalidad({ dioPx, calidad, giro, roll, confianza, neutral, bocaAbierta }) {
+    const f = [
+      { clave: 'resolucion', nombre: 'Resolución (distancia interpupilar)', valor: `${dioPx.toFixed(0)} px`, puntaje: limitar((dioPx - 18) / (60 - 18), 0, 1), peso: 1.4 },
+      { clave: 'nitidez', nombre: 'Nitidez / enfoque', valor: calidad.nitidez.toFixed(0), puntaje: limitar((calidad.nitidez - 8) / (90 - 8), 0, 1), peso: 1.2 },
+      { clave: 'iluminacion', nombre: 'Iluminación', valor: `${calidad.brillo.toFixed(0)}/255`, puntaje: 1 - limitar((Math.abs(calidad.brillo - 125) - 45) / 70, 0, 1), peso: 0.8 },
+      { clave: 'contraste', nombre: 'Contraste', valor: calidad.contraste.toFixed(0), puntaje: limitar((calidad.contraste - 12) / (42 - 12), 0, 1), peso: 0.7 },
+      { clave: 'pose', nombre: 'Pose frontal (giro)', valor: giro.toFixed(2), puntaje: limitar(1 - (Math.abs(giro) - 0.08) / 0.5, 0, 1), peso: 1.2 },
+      { clave: 'inclinacion', nombre: 'Inclinación lateral', valor: `${roll.toFixed(0)}°`, puntaje: limitar(1 - (Math.abs(roll) - 10) / 35, 0, 1), peso: 0.3 },
+      { clave: 'expresion', nombre: 'Expresión neutra', valor: `${(neutral * 100).toFixed(0)} %`, puntaje: limitar(0.5 + neutral * 0.5 - (bocaAbierta ? 0.2 : 0), 0, 1), peso: 0.5 },
+      { clave: 'deteccion', nombre: 'Confianza de detección', valor: `${(confianza * 100).toFixed(0)} %`, puntaje: limitar((confianza - 0.4) / 0.55, 0, 1), peso: 0.6 },
+    ];
+    const sumaPesos = f.reduce((s, x) => s + x.peso, 0);
+    const mediaPonderada = f.reduce((s, x) => s + x.peso * x.puntaje, 0) / sumaPesos;
+    const minimo = Math.min(...f.filter((x) => x.peso >= 1).map((x) => x.puntaje));
+    const puntaje = 100 * (0.7 * mediaPonderada + 0.3 * minimo);
+    const nivel = puntaje >= 75 ? 'Buena' : puntaje >= 50 ? 'Aceptable' : puntaje >= 30 ? 'Deficiente' : 'Muy deficiente';
+    return { puntaje, nivel, factores: f };
+  }
+
+  async function analizarRostro(imagen, deteccion, opciones = {}) {
     const { resultado, lienzo, roll, corregido } = await enderezar(imagen.canvas, deteccion);
     const { valores, pose } = extraerParametros(resultado.landmarks.positions);
     valores.dioPx = valores.dioPx / imagen.escala; // en píxeles de la imagen original
@@ -353,6 +465,11 @@
     const calidad = medirCalidad(lienzo, caja);
     const expr = Object.entries(resultado.expressions).sort((a, b) => b[1] - a[1])[0];
     const tamRostro = Math.round(deteccion.detection.box.width / imagen.escala);
+    const tta = opciones.sinTTA ? { promedio: resultado.descriptor, lista: [resultado.descriptor] } : await descriptoresAumentados(lienzo, resultado);
+    const puntajeCalidad = evaluarCalidad({
+      dioPx: valores.dioPx, calidad, giro: pose.giro, roll,
+      confianza: deteccion.detection.score, neutral: resultado.expressions.neutral || 0, bocaAbierta: pose.bocaAbierta,
+    });
 
     const avisos = [];
     if (tamRostro < 90) avisos.push(`Rostro pequeño (${tamRostro}px de ancho): la precisión disminuye.`);
@@ -366,19 +483,21 @@
     if (deteccion.detection.score < 0.7) avisos.push('Detección con confianza moderada.');
 
     return {
-      descriptor: resultado.descriptor,
+      descriptor: tta.promedio,
+      descriptores: tta.lista,
       valores,
       pose: { ...pose, roll },
       rollCorregido: corregido,
       confianza: deteccion.detection.score,
       tamRostro,
       calidad,
+      puntajeCalidad,
       edad: resultado.age,
       genero: resultado.gender === 'male' ? 'Masculino' : 'Femenino',
       probGenero: resultado.genderProbability,
       expresion: EXPRESIONES[expr[0]] || expr[0],
       probExpresion: expr[1],
-      miniatura: miniaturaRostro(lienzo, resultado),
+      miniatura: opciones.sinMiniatura ? null : miniaturaRostro(lienzo, resultado),
       avisos,
     };
   }
@@ -387,8 +506,8 @@
   /* Comparación                                                         */
   /* ------------------------------------------------------------------ */
   function similitudDescriptor(d) {
-    // Curva logística calibrada sobre el criterio estándar de face-api (d < 0.6 = misma persona).
-    return 100 / (1 + Math.exp((d - 0.52) / 0.055));
+    // Curva logística centrada en el umbral de error igual medido empíricamente (d ≈ 0,62 → 50 %).
+    return 100 / (1 + Math.exp((d - 0.62) / 0.06));
   }
 
   function compararParametros(a, b) {
@@ -451,5 +570,5 @@
     };
   }
 
-  window.AnalisisFacial = { prepararArchivo, detectarRostros, analizarRostro, comparar, DEFINICIONES };
+  window.AnalisisFacial = { prepararArchivo, detectarRostros, detectarConRespaldo, analizarRostro, comparar, compararParametros, similitudDescriptor, DEFINICIONES };
 })();

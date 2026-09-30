@@ -60,16 +60,54 @@
         <tr><th>Edad estimada</th><td>${num(r.edad, 0)} años <small>(margen aprox. ± 6)</small></td></tr>
         <tr><th>Sexo estimado</th><td>${esc(r.genero)} (${pct(r.probGenero * 100, 0)})</td></tr>
         <tr><th>Expresión</th><td>${esc(r.expresion)} (${pct(r.probExpresion * 100, 0)})</td></tr>
+        <tr><th>Puntaje de calidad</th><td><b>${num(r.puntajeCalidad.puntaje, 0)}/100</b> (${esc(r.puntajeCalidad.nivel)})</td></tr>
         <tr><th>Calidad</th><td>Brillo ${num(r.calidad.brillo, 0)}/255 · Contraste ${num(r.calidad.contraste, 0)} · Nitidez ${num(r.calidad.nitidez, 0)}</td></tr>
       </table>
       ${r.avisos.length ? `<ul class="avisos">${r.avisos.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>` : '<p class="ok">Sin observaciones de calidad.</p>'}
     </div>`;
   }
 
-  function generarHTML({ img1, img2, r1, r2, res, backend }) {
+  function formatoLR(l10) {
+    const lr = 10 ** Math.abs(l10);
+    const t = lr >= 1e6 ? '> 1.000.000' : lr >= 100 ? Math.round(lr).toLocaleString('es-CL') : num(lr, 1);
+    return l10 >= 0 ? t : `1/${t}`;
+  }
+
+  function seccionCerteza(r1, r2, res, aut, n) {
+    const u = aut.umbrales;
+    const tablaCalidad = (r, t) => `<div class="ficha"><h3>${t}: ${num(r.puntajeCalidad.puntaje, 0)}/100 (${esc(r.puntajeCalidad.nivel)})</h3>
+      <table class="kv">${r.puntajeCalidad.factores.map((f) => `<tr><th>${esc(f.nombre)}</th><td>${esc(f.valor)}</td><td>${barra(f.puntaje * 100)}</td></tr>`).join('')}</table></div>`;
+    return `
+  <h2>${n}. Certeza estadística y umbral automático</h2>
+  <p style="margin-top:0">El umbral se ajusta a la calidad de las imágenes. Con el modelo estadístico de distancias (misma persona vs. personas distintas) para una calidad de par de <b>${num(aut.q * 100, 0)}/100</b> se obtiene:</p>
+  <table class="componentes">
+    <tr><th>Indicador</th><th>Valor</th><th>Interpretación</th></tr>
+    <tr><td><b>Razón de verosimilitud (LR)</b></td><td><b>${formatoLR(aut.log10lr)}</b></td><td>${esc(aut.verbal.texto)} (escala verbal ENFSI). Descriptor: ${formatoLR(aut.log10lrDescriptor)} · geometría: ${formatoLR(aut.log10lrGeometria)}.</td></tr>
+    <tr><td><b>Grado de certeza (misma persona)</b></td><td><b>${pct(Math.min(99.99, Math.max(0.01, aut.certeza * 100)), 2)}</b></td><td>Probabilidad posterior asumiendo 50 % previo (sin otra información del caso).</td></tr>
+    ${aut.log10lr >= 0
+      ? `<tr><td><b>Riesgo de falsa coincidencia</b></td><td>${aut.formatoRazon(aut.fmrObservada)}</td><td>Pares de personas distintas que alcanzarían una similitud igual o mayor a la observada.</td></tr>`
+      : `<tr><td><b>Riesgo de que sí sea la misma persona</b></td><td>${aut.formatoRazon(aut.fnmrObservada)}</td><td>Pares de la misma persona que tendrían una similitud igual o menor a la observada.</td></tr>`}
+    <tr><td><b>Zonas de decisión</b></td><td style="white-space:nowrap">Distintas: &lt; ${pct(u.exclusion.similitud)}<br>No concluyente: ${pct(u.exclusion.similitud)}–${pct(u.coincidencia.similitud)}<br>Misma persona: ≥ ${pct(u.coincidencia.similitud)}</td><td>Zonas en similitud biométrica, calculadas para esta calidad: personas distintas si LR ≤ 1/100, misma persona si LR ≥ 100. Observada: <b>${pct(res.simDescriptor)}</b>.</td></tr>
+    ${aut.estabilidad ? `<tr><td><b>Estabilidad</b></td><td>${pct(AnalisisFacial.similitudDescriptor(aut.estabilidad.dMax))}–${pct(AnalisisFacial.similitudDescriptor(aut.estabilidad.dMin))}</td><td>Rango de similitud entre variantes (original, espejo, ecualizada). ${aut.estabilidad.cruzaUmbral ? 'Cruza el umbral: resultado inestable.' : 'No cruza el umbral: resultado estable.'}</td></tr>` : ''}
+  </table>
+  <h3 style="margin-top:16px">¿Con qué porcentaje de similitud se puede tener certeza? (fotos de esta calidad)</h3>
+  <table class="componentes">
+    <tr><th>Similitud biométrica mínima</th><th>Riesgo de aceptar a una persona distinta</th><th>Riesgo de rechazar a la misma persona</th><th>¿Esta comparación la supera?</th></tr>
+    ${aut.puntos.map((p) => `<tr><td><b>≥ ${pct(p.similitud)}</b> (distancia ≤ ${num(p.distancia, 3)})</td><td>${aut.formatoRazon(p.fmr)}</td><td>${pct(p.fnmr * 100)}</td><td>${res.simDescriptor >= p.similitud ? '<b style="color:#1a7f4b">Sí</b>' : 'No'}</td></tr>`).join('')}
+  </table>
+  <h3 style="margin-top:16px">Calidad de las imágenes</h3>
+  <div class="fichas">${tablaCalidad(r1, 'Foto 1')}${tablaCalidad(r2, 'Foto 2')}</div>
+  <p style="font-size:11.5px;color:#5b6475">Fuente del modelo: ${esc(aut.P.fuente)}. Parámetros para esta calidad: misma persona ${num(aut.P.mg, 3)} ± ${num(aut.P.sg, 3)}; personas distintas ${num(aut.P.mi, 3)} ± ${num(aut.P.si, 3)}.</p>`;
+  }
+
+  function generarHTML({ img1, img2, r1, r2, res, aut, modo = 'manual', backend }) {
+    const auto = modo === 'auto' && aut;
     const ahora = new Date();
     const id = `CR-${ahora.getFullYear()}${String(ahora.getMonth() + 1).padStart(2, '0')}${String(ahora.getDate()).padStart(2, '0')}-${String(ahora.getHours()).padStart(2, '0')}${String(ahora.getMinutes()).padStart(2, '0')}${String(ahora.getSeconds()).padStart(2, '0')}`;
-    const color = { alta: '#1a7f4b', media: '#6b8e23', dudosa: '#b7791f', baja: '#c0392b' }[res.nivel];
+    const nivel = auto ? aut.nivel : res.nivel;
+    const veredicto = auto ? aut.veredicto : res.veredicto;
+    const color = { alta: '#1a7f4b', media: '#6b8e23', dudosa: '#b7791f', baja: '#c0392b' }[nivel];
+    let n = 1;
 
     const grupos = [];
     for (const p of res.parametros) {
@@ -154,25 +192,31 @@
     </div>
   </header>
 
-  <h2>1. Resultado general</h2>
+  <h2>${n++}. Resultado general</h2>
   <div class="resumen">
-    <div class="porcentaje">${num(res.total, 1)}%<small>Similitud global</small></div>
+    ${auto
+      ? `<div class="porcentaje">${num(Math.min(99.99, Math.max(0.01, aut.certeza * 100)), aut.certeza > 0.99 || aut.certeza < 0.01 ? 2 : 1)}%<small>Grado de certeza (misma persona)</small></div>`
+      : `<div class="porcentaje">${num(res.total, 1)}%<small>Similitud global</small></div>`}
     <div>
-      <p class="veredicto">${esc(res.veredicto)}</p>
-      <div>Umbral de decisión configurado: <b>${num(res.umbral, 0)} %</b>.
+      <p class="veredicto">${esc(veredicto)}</p>
+      <div>${auto
+        ? `Modo <b>automático</b>: umbral ajustado a la calidad de las fotos (${num(aut.q * 100, 0)}/100). LR = <b>${formatoLR(aut.log10lr)}</b> — ${esc(aut.verbal.texto)}. Similitud global: <b>${pct(res.total)}</b>.`
+        : `Modo <b>manual</b>. Umbral de decisión configurado: <b>${num(res.umbral, 0)} %</b>.`}
       Distancia euclidiana entre descriptores: <b>${num(res.distancia, 4)}</b>
       (${res.coincideDescriptor ? 'por debajo' : 'por encima'} del umbral estándar 0,60 de face-api → ${res.coincideDescriptor ? 'coincidencia' : 'no coincidencia'} biométrica).</div>
-      ${res.avisos.length ? `<ul class="avisos">${res.avisos.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}
+      ${[...(auto ? aut.avisos : []), ...res.avisos].length ? `<ul class="avisos">${[...(auto ? aut.avisos : []), ...res.avisos].map((a) => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}
     </div>
   </div>
 
-  <h2>2. Archivos analizados</h2>
+  ${aut ? seccionCerteza(r1, r2, res, aut, n++) : ''}
+
+  <h2>${n++}. Archivos analizados</h2>
   <div class="fichas">
     ${fichaArchivo('Foto 1', img1, r1)}
     ${fichaArchivo('Foto 2', img2, r2)}
   </div>
 
-  <h2>3. Componentes de la similitud</h2>
+  <h2>${n++}. Componentes de la similitud</h2>
   <table class="componentes">
     <tr><th>Componente</th><th>Detalle</th><th>Peso</th><th>Similitud</th></tr>
     <tr><td><b>Descriptor biométrico (red neuronal)</b></td><td>Vector de 128 dimensiones (ResNet-34). Distancia ${num(res.distancia, 4)} · similitud coseno ${num(res.coseno, 4)}</td><td>${pct(res.pesos.descriptor * 100, 0)}</td><td>${barra(res.simDescriptor)}</td></tr>
@@ -180,23 +224,26 @@
     <tr><td><b>Rasgos demográficos estimados</b></td><td>Edad: diferencia ${num(res.difEdad, 0)} años (${pct(res.simEdad, 0)}) · Sexo: ${r1.genero === r2.genero ? 'coincide' : 'no coincide'} (${pct(res.simGenero, 0)})</td><td>${pct(res.pesos.demografia * 100, 0)}</td><td>${barra(res.simDemografia)}</td></tr>
   </table>
 
-  <h2>4. Parámetros faciales y comparación individual</h2>
+  <h2>${n++}. Parámetros faciales y comparación individual</h2>
   <p style="margin-top:0;font-size:12px;color:#5b6475">Las medidas se expresan en múltiplos de la distancia interpupilar (DIO) tras alinear los ojos horizontalmente, de modo que no dependen del tamaño de la foto. "Dif." es la diferencia relativa entre ambos valores.</p>
   <table class="tabla">
     <thead><tr><th>Parámetro</th><th class="num">Foto 1</th><th class="num">Foto 2</th><th class="num">Dif.</th><th>Unidad</th><th>Similitud</th></tr></thead>
     <tbody>${filas}</tbody>
   </table>
 
-  <h2>5. Conclusión</h2>
-  <p>Con una similitud global de <b>${pct(res.total)}</b> frente a un umbral de <b>${num(res.umbral, 0)} %</b>, el sistema concluye:
-  <b style="color:${color}">${esc(res.veredicto.toLowerCase())}</b>.
-  ${res.total >= res.umbral
+  <h2>${n++}. Conclusión</h2>
+  <p>${auto
+    ? `Con una razón de verosimilitud de <b>${formatoLR(aut.log10lr)}</b> (${esc(aut.verbal.texto.toLowerCase())}) y un grado de certeza de <b>${pct(Math.min(99.99, Math.max(0.01, aut.certeza * 100)), 2)}</b>, evaluados con un umbral adaptado a la calidad de las imágenes, el sistema concluye:`
+    : `Con una similitud global de <b>${pct(res.total)}</b> frente a un umbral de <b>${num(res.umbral, 0)} %</b>, el sistema concluye:`}
+  <b style="color:${color}">${esc(veredicto.toLowerCase())}</b>.
+  ${nivel === 'dudosa' ? 'La evidencia no permite afirmar ni descartar que las fotografías correspondan a la misma persona.' : (nivel === 'alta' || nivel === 'media')
     ? 'Las fotografías "' + esc(img1.nombre) + '" y "' + esc(img2.nombre) + '" presentan rasgos biométricos compatibles con corresponder a la misma persona.'
     : 'Las fotografías "' + esc(img1.nombre) + '" y "' + esc(img2.nombre) + '" no alcanzan el umbral de similitud requerido para afirmar que corresponden a la misma persona.'}</p>
 
-  <h2>6. Metodología y limitaciones</h2>
+  <h2>${n++}. Metodología y limitaciones</h2>
   <div class="nota">
-    <p><b>Metodología.</b> Detección de rostros con SSD MobileNet v1; localización de 68 puntos faciales; enderezado automático del rostro según la línea de los ojos; extracción de un descriptor de 128 dimensiones con una red ResNet-34 entrenada para reconocimiento facial (face-api.js sobre TensorFlow.js); cálculo de ${res.parametros.length - 1} parámetros antropométricos normalizados y estimación de edad, sexo y expresión. La similitud global combina los tres componentes con los pesos indicados. La similitud de cada parámetro se calcula con una función gaussiana sobre la diferencia relativa, escalada según la variación esperable en una misma persona.</p>
+    <p><b>Metodología.</b> Detección de rostros con SSD MobileNet v1; localización de 68 puntos faciales; enderezado automático del rostro según la línea de los ojos; extracción de un descriptor de 128 dimensiones con una red ResNet-34 entrenada para reconocimiento facial (face-api.js sobre TensorFlow.js), promediado sobre variantes de la imagen (original, espejo y ecualizada; técnica TTA) para reducir el efecto de la iluminación y la asimetría; cálculo de ${res.parametros.length - 1} parámetros antropométricos normalizados y estimación de edad, sexo y expresión. La similitud global combina los tres componentes con los pesos indicados. La similitud de cada parámetro se calcula con una función gaussiana sobre la diferencia relativa, escalada según la variación esperable en una misma persona.</p>
+    <p><b>Modo automático y certeza.</b> Cada imagen recibe un puntaje de calidad (resolución interpupilar, nitidez, iluminación, contraste, pose, inclinación, expresión y confianza de detección, con criterios inspirados en ISO/IEC 29794-5). Según la calidad del par, se modelan las distancias esperables entre fotos de la misma persona y de personas distintas (distribuciones obtenidas empíricamente con fotografías etiquetadas y versiones degradadas). Con ellas se calcula la razón de verosimilitud (LR), forma de expresar conclusiones recomendada por ENFSI y FISWG, las tasas de error esperables y los umbrales de decisión: misma persona si LR ≥ 100 y personas distintas si LR ≤ 1/100. Las fotos de peor calidad producen umbrales más exigentes y una franja no concluyente más amplia.</p>
     <p><b>Limitaciones.</b> El resultado es probabilístico y orientativo; no constituye por sí solo una identificación pericial. La iluminación, la resolución, la pose, la expresión, el uso de anteojos, barba o maquillaje, el paso del tiempo y la compresión de la imagen afectan los resultados. Las estimaciones de edad y sexo tienen margen de error. Ante decisiones relevantes, el resultado debe ser validado por un perito en identificación facial.</p>
     <p><b>Privacidad.</b> Las imágenes fueron procesadas íntegramente en el navegador del usuario; no se enviaron a ningún servidor. Los hashes SHA-256 permiten verificar la integridad de los archivos originales.</p>
   </div>

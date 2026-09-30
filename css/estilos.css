@@ -187,3 +187,74 @@ main { padding-top: 20px; padding-bottom: 40px; }
   .tabla-parametros td, .tabla-parametros th { padding: 7px 8px; }
   .barra.mini { width: 48px; }
 }
+
+/* Modo de decisión */
+.modo { display: grid; gap: 6px; }
+.modo-titulo { font-size: .8rem; font-weight: 600; color: var(--texto-suave); text-transform: uppercase; letter-spacing: .04em; }
+.segmentado { display: inline-flex; border: 1px solid var(--borde); border-radius: 10px; overflow: hidden; }
+.segmentado label { cursor: pointer; }
+.segmentado input { position: absolute; opacity: 0; pointer-events: none; }
+.segmentado span { display: block; padding: 9px 16px; font-weight: 600; font-size: .92rem; }
+.segmentado span small { display: block; font-weight: 500; font-size: .7rem; opacity: .75; }
+.segmentado input:checked + span { background: var(--primario); color: var(--superficie); }
+.segmentado input:focus-visible + span { outline: 2px solid var(--acento); outline-offset: -2px; }
+.estado-calibracion a { color: var(--primario-claro); }
+
+/* Bloque de certeza */
+.bloque-certeza h3 { margin-top: 26px; }
+.bloque-certeza h4 { margin: 20px 0 8px; font-size: .98rem; }
+.bloque-certeza h4 small { font-weight: 400; color: var(--texto-suave); }
+.certeza-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px; align-items: start; }
+.calidad-foto { border: 1px solid var(--borde); border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; }
+.calidad-foto summary { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; cursor: pointer; font-size: .9rem; list-style: none; }
+.calidad-foto summary::-webkit-details-marker { display: none; }
+.calidad-foto summary::before { content: "▸"; color: var(--texto-suave); position: absolute; margin-left: -10px; }
+.calidad-foto[open] summary::before { content: "▾"; }
+.calidad-foto summary .barra { margin: 0; }
+.calidad-foto table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: .82rem; }
+.calidad-foto td { padding: 3px 4px; border-top: 1px solid var(--borde); white-space: nowrap; }
+.calidad-foto td:first-child { white-space: normal; color: var(--texto-suave); }
+.certeza-datos { display: grid; gap: 10px; }
+.dato { border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; display: grid; gap: 2px; }
+.dato small { color: var(--texto-suave); font-size: .78rem; }
+.dato b { font-size: 1.35rem; color: var(--nivel); }
+.dato span { font-size: .82rem; color: var(--texto-suave); }
+.nota-mini { font-size: .82rem; color: var(--texto-suave); margin: 8px 0 0; }
+
+.zonas { margin-top: 18px; }
+.zonas-titulo { font-size: .9rem; margin-bottom: 8px; }
+.zonas-barra { position: relative; display: flex; height: 18px; border-radius: 9px; overflow: visible; }
+.zonas-barra > span { display: block; height: 100%; }
+.zonas-barra > span:first-child { border-radius: 9px 0 0 9px; }
+.zonas-barra > span:nth-child(3) { border-radius: 0 9px 9px 0; }
+.z-roja { background: color-mix(in srgb, var(--rojo) 70%, transparent); }
+.z-ambar { background: color-mix(in srgb, var(--ambar) 70%, transparent); }
+.z-verde { background: color-mix(in srgb, var(--verde) 70%, transparent); }
+.marcador { position: absolute; top: -6px; width: 4px; height: 30px; margin-left: -2px; background: var(--texto); border-radius: 2px; box-shadow: 0 0 0 2px var(--superficie); }
+.zonas-leyenda { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .8rem; color: var(--texto-suave); margin-top: 8px; }
+.zonas-leyenda i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+.tabla-puntos tr.cumple td { background: color-mix(in srgb, var(--verde) 10%, transparent); }
+.tabla-puntos tr.cumple td:first-child b::after { content: " ✓"; color: var(--verde); }
+
+/* Calibración */
+.calibracion { margin-top: 18px; background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio); box-shadow: var(--sombra); }
+.calibracion summary { padding: 14px 16px; cursor: pointer; font-weight: 700; }
+.calibracion summary small { font-weight: 400; color: var(--texto-suave); }
+.calibracion-cuerpo { padding: 0 16px 16px; font-size: .92rem; }
+.calibracion code { background: var(--fondo); padding: 1px 5px; border-radius: 4px; font-size: .85em; }
+.cal-estado { margin-top: 10px; color: var(--texto-suave); font-size: .88rem; }
+.cal-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 12px; }
+.cal-resumen div { border: 1px solid var(--borde); border-radius: 8px; padding: 8px 10px; display: grid; }
+.cal-resumen small { color: var(--texto-suave); font-size: .75rem; }
+.histograma { width: 100%; max-width: 620px; margin-top: 12px; display: block; }
+.histograma text { font-size: 10px; fill: var(--texto-suave); }
+.h-gen { fill: color-mix(in srgb, var(--verde) 75%, transparent); background: color-mix(in srgb, var(--verde) 75%, transparent); }
+.h-imp { fill: color-mix(in srgb, var(--rojo) 60%, transparent); background: color-mix(in srgb, var(--rojo) 60%, transparent); }
+.h-umbral { stroke: var(--texto); stroke-dasharray: 4 3; }
+
+@media (max-width: 820px) {
+  .certeza-grid { grid-template-columns: 1fr; }
+  .modo, .segmentado { width: 100%; }
+  .segmentado label { flex: 1; text-align: center; }
+}
+.medidor-texto b.largo { font-size: 1.85rem; }
