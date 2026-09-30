@@ -34,9 +34,12 @@ node validar.js             # tasas de acierto/error/no concluyente del modo aut
 - **EER global:** 0,65 % con umbral en distancia 0,622. Con el umbral fijo de face-api (0,60) se obtienen 1,5 % de falsos rechazos y 0,39 % de falsas coincidencias.
 - **Geometría facial (24 parámetros):** EER de 42 %. Su poder discriminante es bajo, así que en la LR su aporte se limita a ×2.
 - **TTA (espejo + ecualización):** no mejoró el EER en este conjunto (0,65 % frente a 0,60 %). Se mantiene como indicador de estabilidad.
-- **Validación del modo automático (dentro de la muestra):**
-  - pares de personas distintas: 0,00 % declarados "misma persona", 90,7 % "distintas" y 9,3 % no concluyentes;
-  - pares de la misma persona: 87,0 % declarados "misma persona", 0,04 % "distintas" y 12,9 % no concluyentes.
+- **Validación del modo automático (dentro de la muestra, con el componente de "impostores difíciles"):**
+  - pares de personas distintas: 0,00 % declarados "misma persona", 90,6 % "distintas" y 9,4 % no concluyentes;
+  - pares de la misma persona: 65,6 % declarados "misma persona", 0,04 % "distintas" y 34,4 % no concluyentes.
+
+  Sin ese componente, el 87 % de los pares de la misma persona era concluyente, pero se aceptaba un riesgo no medido de falsas coincidencias con personas parecidas.
+- **Caso real de falsa coincidencia (30-09-2026):** dos hombres distintos obtuvieron una distancia de 0,52 (LR = 120, "muy probablemente la misma persona") con el modelo sin corregir. La pareja quedó más cerca que el 99,5 % de los pares de personas distintas del conjunto de calibración. Un segundo reconocedor (faceres, de la librería Human) tampoco los separó: quedó más cerca que el 99,7 %. Por eso se agregó un componente de "impostores difíciles" (N(0,58; 0,07), peso 3 %), con el que la falsa coincidencia en el umbral estándar sube ~10 veces, en línea con las diferencias demográficas documentadas por NIST (FRVT parte 3, 2019). También se exige LR ≥ 100 para concluir. El caso ahora resulta "no concluyente" (LR ≈ 19), y la diferencia de despegue de la oreja, registrada por el observador, lleva la conclusión integrada a "probable exclusión".
 - **Rostros muy recortados** (tipo carné): sin margen alrededor, el detector fallaba en 26 de 35 casos. Por eso la app agrega un margen automático y vuelve a intentar, con lo que se detectaron todos.
 
-**Limitaciones:** la muestra es pequeña (20 personas) y la validación es dentro de la muestra. Por eso el modelo amplía las desviaciones en un 15 % y usa una extrapolación prudente para calidades inferiores a 0,35. Para uso institucional conviene calibrar con casos propios desde la sección "Calibración" de la app.
+**Limitaciones:** la muestra es pequeña (20 personas) y está compuesta sobre todo por personas de piel clara y la validación es dentro de la muestra. Por eso el modelo amplía las desviaciones en un 15 % y usa una extrapolación prudente para calidades inferiores a 0,35. Para uso institucional conviene calibrar con casos propios desde la sección "Calibración" de la app.

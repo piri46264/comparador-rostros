@@ -105,17 +105,19 @@
     const colorN = { alta: '#1a7f4b', media: '#6b8e23', dudosa: '#b7791f', baja: '#c0392b' }[m.nivel] || '#5b6475';
     const colorV = (v) => ({ similar: '#1a7f4b', coincide: '#1a7f4b', diferente: '#c0392b', nocoincide: '#c0392b', solo1: '#b7791f', solo2: '#b7791f' }[v] || '#5b6475');
     const evaluados = m.filas.filter((f) => f.valor);
-    const medida = (x) => (x ? `${num(x.relNariz, 3)} (${num(x.orejaPx, 0)} px; nariz ${num(x.narizPx, 0)} px)` : 'Sin marcar');
+    const medida = (x) => (x && x.oreja ? `${num(x.relNariz, 3)} (${num(x.orejaPx, 0)} px; nariz ${num(x.narizPx, 0)} px)` : 'Sin marcar');
+    const medidaSep = (x) => (x && x.sepGrados !== undefined ? `≈ ${num(x.sepGrados, 0)}° (${esc(x.sepClase)}; índice ${num(x.sepRel, 2)})` : 'Sin marcar');
     return `
   <h2>${n}. Análisis morfológico asistido y orejas</h2>
   <p style="margin-top:0;font-size:12px;color:#5b6475">Juicio del observador${m.observador ? ` <b>${esc(m.observador)}</b>` : ''}, con comparación visual lado a lado según los componentes faciales de FISWG. Complementa al análisis automático y no modifica la razón de verosimilitud.</p>
-  ${o && (o.a || o.b) ? `
+  ${o && ((o.a && (o.a.oreja || o.a.sepGrados !== undefined)) || (o.b && (o.b.oreja || o.b.sepGrados !== undefined))) ? `
   <h3>Medición de la oreja${m.lado ? ` (${esc(m.lado)})` : ''}</h3>
-  ${m.recortes && (m.recortes[1] || m.recortes[2]) ? `<div class="imgs" style="max-width:480px">${[1, 2].map((k) => m.recortes[k] ? `<figure><img src="${m.recortes[k]}" alt="Oreja foto ${k}"><figcaption>Oreja foto ${k} (A–B)</figcaption></figure>` : '').join('')}</div>` : ''}
+  ${m.recortes && (m.recortes[1] || m.recortes[2]) ? `<div class="imgs" style="max-width:480px">${[1, 2].map((k) => m.recortes[k] ? `<figure><img src="${m.recortes[k]}" alt="Oreja foto ${k}"><figcaption>Oreja foto ${k} (A–B naranja, C–D magenta)</figcaption></figure>` : '').join('')}</div>` : ''}
   <table class="componentes">
     <tr><th>Medida</th><th>Foto 1</th><th>Foto 2</th><th>Similitud</th></tr>
     <tr><td><b>Largo de oreja / largo de nariz</b></td><td>${medida(o.a)}</td><td>${medida(o.b)}</td><td>${o.completa ? `${barra(o.similitud)} <small>dif. ${pct(o.diferencia)}</small>` : '—'}</td></tr>
-    <tr><td><b>Largo de oreja / altura facial</b></td><td>${o.a ? num(o.a.relCara, 3) : '—'}</td><td>${o.b ? num(o.b.relCara, 3) : '—'}</td><td></td></tr>
+    <tr><td><b>Largo de oreja / altura facial</b></td><td>${o.a && o.a.oreja ? num(o.a.relCara, 3) : '—'}</td><td>${o.b && o.b.oreja ? num(o.b.relCara, 3) : '—'}</td><td></td></tr>
+    <tr><td><b>Separación de la oreja (C–D)</b><br><small>Ángulo aproximado; normal ≈ 20–40°, despegada &gt; 40°</small></td><td>${medidaSep(o.a)}</td><td>${medidaSep(o.b)}</td><td>${o.sepCompleta ? `${barra(o.sepSimilitud)} <small>dif. ${num(o.sepDiferencia, 0)}°${o.sepPoseComparable ? '' : ' · pose no comparable'}</small>` : '—'}</td></tr>
   </table>
   ${o.avisos && o.avisos.length ? `<ul class="avisos">${o.avisos.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}` : ''}
   <h3 style="margin-top:14px">Lista de verificación</h3>
@@ -129,7 +131,7 @@
     (${m.cuenta.concordantes} concordantes · ${m.cuenta.discordantes} diferentes · ${m.cuenta.unaSola} en una sola foto · ${m.cuenta.noVisibles} no visibles)</div>`;
   }
 
-  function generarHTML({ img1, img2, r1, r2, res, aut, modo = 'manual', backend, morfologia }) {
+  function generarHTML({ img1, img2, r1, r2, res, aut, modo = 'manual', backend, morfologia, integrada }) {
     const hayMorfo = morfologia && morfologia.nivel !== 'ninguno';
     const auto = modo === 'auto' && aut;
     const ahora = new Date();
@@ -225,15 +227,19 @@
   <h2>${n++}. Resultado general</h2>
   <div class="resumen">
     ${auto
-      ? `<div class="porcentaje">${num(Math.min(99.99, Math.max(0.01, aut.certeza * 100)), aut.certeza > 0.99 || aut.certeza < 0.01 ? 2 : 1)}%<small>Grado de certeza (misma persona)</small></div>`
+      ? (Math.abs(aut.log10lr) < 2
+        ? `<div class="porcentaje" style="font-size:34px">LR ${formatoLR(aut.log10lr)}<small>Fuerza de la evidencia · no concluyente</small></div>`
+        : `<div class="porcentaje">${num(Math.min(99.99, Math.max(0.01, aut.certeza * 100)), aut.certeza > 0.99 || aut.certeza < 0.01 ? 2 : 1)}%<small>Grado de certeza (misma persona)</small></div>`)
       : `<div class="porcentaje">${num(res.total, 1)}%<small>Similitud global</small></div>`}
     <div>
       <p class="veredicto">${esc(veredicto)}</p>
       <div>${auto
         ? `Modo <b>automático</b>: umbral ajustado a la calidad de las fotos (${num(aut.q * 100, 0)}/100). LR = <b>${formatoLR(aut.log10lr)}</b> — ${esc(aut.verbal.texto)}. Similitud global: <b>${pct(res.total)}</b>.`
         : `Modo <b>manual</b>. Umbral de decisión configurado: <b>${num(res.umbral, 0)} %</b>.`}
-      Distancia euclidiana entre descriptores: <b>${num(res.distancia, 4)}</b>
-      (${res.coincideDescriptor ? 'por debajo' : 'por encima'} del umbral estándar 0,60 de face-api → ${res.coincideDescriptor ? 'coincidencia' : 'no coincidencia'} biométrica).</div>
+      Distancia euclidiana entre descriptores: <b>${num(res.distancia, 4)}</b>${auto
+        ? ` (con el umbral fijo 0,60 de face-api, sin ajuste por calidad ni por parecidos, se habría declarado ${res.coincideDescriptor ? 'coincidencia' : 'no coincidencia'}).`
+        : ` (${res.coincideDescriptor ? 'por debajo' : 'por encima'} del umbral estándar 0,60 de face-api → ${res.coincideDescriptor ? 'coincidencia' : 'no coincidencia'} biométrica).`}</div>
+      ${integrada ? `<div style="margin-top:10px;border:2px solid ${{ alta: '#1a7f4b', media: '#6b8e23', dudosa: '#b7791f', baja: '#c0392b' }[integrada.nivel]};border-radius:8px;padding:8px 12px"><small style="color:#5b6475;text-transform:uppercase;letter-spacing:.04em">Conclusión integrada (automático + morfológico)</small><br><b style="font-size:15px;color:${{ alta: '#1a7f4b', media: '#6b8e23', dudosa: '#b7791f', baja: '#c0392b' }[integrada.nivel]}">${esc(integrada.titulo)}</b><br><span>${esc(integrada.detalle)}</span></div>` : ''}
       ${[...(auto ? aut.avisos : []), ...res.avisos].length ? `<ul class="avisos">${[...(auto ? aut.avisos : []), ...res.avisos].map((a) => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}
     </div>
   </div>
@@ -272,12 +278,13 @@
     ? 'Las fotografías "' + esc(img1.nombre) + '" y "' + esc(img2.nombre) + '" presentan rasgos biométricos compatibles con corresponder a la misma persona.'
     : 'Las fotografías "' + esc(img1.nombre) + '" y "' + esc(img2.nombre) + '" no alcanzan el umbral de similitud requerido para afirmar que corresponden a la misma persona.'}</p>
   ${hayMorfo ? `<p><b>Análisis morfológico (observador):</b> ${esc(morfologia.conclusion)}</p>` : ''}
+  ${integrada ? `<p><b>Conclusión integrada:</b> <b>${esc(integrada.titulo)}</b>. ${esc(integrada.detalle)}</p>` : ''}
 
   <h2>${n++}. Metodología y limitaciones</h2>
   <div class="nota">
     <p><b>Metodología.</b> Detección de rostros con SSD MobileNet v1; localización de 68 puntos faciales; enderezado automático del rostro según la línea de los ojos; extracción de un descriptor de 128 dimensiones con una red ResNet-34 entrenada para reconocimiento facial (face-api.js sobre TensorFlow.js), promediado sobre variantes de la imagen (original, espejo y ecualizada; técnica TTA) para reducir el efecto de la iluminación y la asimetría; cálculo de ${res.parametros.length - 1} parámetros antropométricos normalizados y estimación de edad, sexo y expresión. La similitud global combina los tres componentes con los pesos indicados. La similitud de cada parámetro se calcula con una función gaussiana sobre la diferencia relativa, escalada según la variación esperable en una misma persona.</p>
     <p><b>Modo automático y certeza.</b> Cada imagen recibe un puntaje de calidad (resolución interpupilar, nitidez, iluminación, contraste, pose, inclinación, expresión y confianza de detección, con criterios inspirados en ISO/IEC 29794-5). Según la calidad del par, se modelan las distancias esperables entre fotos de la misma persona y de personas distintas (distribuciones obtenidas empíricamente con fotografías etiquetadas y versiones degradadas). Con ellas se calcula la razón de verosimilitud (LR), forma de expresar conclusiones recomendada por ENFSI y FISWG, las tasas de error esperables y los umbrales de decisión: misma persona si LR ≥ 100 y personas distintas si LR ≤ 1/100. Las fotos de peor calidad producen umbrales más exigentes y una franja no concluyente más amplia.</p>
-    <p><b>Análisis morfológico y orejas.</b> La comparación de rasgos (oreja, marcas particulares y rasgos faciales) la realiza el observador de forma visual, según los componentes de FISWG. La oreja es muy individual y estable, aunque crece levemente con la edad (unos 0,2 mm por año, sobre todo el lóbulo); su largo se mide con dos puntos marcados manualmente y se expresa como proporción del largo de la nariz, para no depender de la escala. La forma del cuello no se usa como rasgo identificador porque varía con el peso, la postura y la edad; sí se consideran sus marcas particulares (tatuajes, cicatrices, lunares).</p>
+    <p><b>Análisis morfológico y orejas.</b> La comparación de rasgos (oreja, marcas particulares y rasgos faciales) la realiza el observador de forma visual, según los componentes de FISWG. La oreja es muy individual y estable, aunque crece levemente con la edad (unos 0,2 mm por año, sobre todo el lóbulo); su largo se mide con dos puntos marcados manualmente y se expresa como proporción del largo de la nariz, para no depender de la escala. La separación de la oreja respecto del cráneo (despegue) se estima con otros dos puntos (unión con la cabeza y borde más externo del hélix), proyectados sobre el eje transversal de la cara; es muy sensible a la pose, por lo que solo se compara entre fotos casi frontales y con un giro parecido. La conclusión integrada da prioridad a las diferencias verificadas en rasgos estables, porque dos personas distintas pueden parecerse globalmente, pero una misma persona no cambia la forma ni el despegue de sus orejas. La forma del cuello no se usa como rasgo identificador porque varía con el peso, la postura y la edad; sí se consideran sus marcas particulares (tatuajes, cicatrices, lunares).</p>
     <p><b>Limitaciones.</b> El resultado es probabilístico y orientativo; no constituye por sí solo una identificación pericial. La iluminación, la resolución, la pose, la expresión, el uso de anteojos, barba o maquillaje, el paso del tiempo y la compresión de la imagen afectan los resultados. Las estimaciones de edad y sexo tienen margen de error. Ante decisiones relevantes, el resultado debe ser validado por un perito en identificación facial.</p>
     <p><b>Privacidad.</b> Las imágenes fueron procesadas íntegramente en el navegador del usuario; no se enviaron a ningún servidor. Los hashes SHA-256 permiten verificar la integridad de los archivos originales.</p>
   </div>

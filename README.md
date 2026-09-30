@@ -35,7 +35,9 @@ No existe un porcentaje fijo que garantice certeza. El umbral correcto depende d
 4. Informa el **grado de certeza** (probabilidad de misma persona con un 50 % previo) y los riesgos de error: cuántos pares de personas distintas alcanzarían esa similitud y cuántos pares de la misma persona saldrían más bajos.
 5. Dibuja las **zonas de decisión** para esa calidad (distintas / no concluyente / misma persona) y la tabla **"¿Con qué % puedo tener certeza?"**, con el porcentaje mínimo exigido para riesgos de 1 en 100, 1 en 1.000, 1 en 10.000 y 1 en 100.000.
 
-Decisión automática: *misma persona* si LR ≥ 100, *personas distintas* si LR ≤ 1/100 y *no concluyente* entre ambos. Con calidad del par inferior a 15/100 se declara "calidad insuficiente".
+Decisión automática: *misma persona* si LR ≥ 100, *personas distintas* si LR ≤ 1/100 y *no concluyente* entre ambos (se indica hacia qué lado se inclina). Cuando no es concluyente, el indicador muestra la LR en lugar de un porcentaje, para que no parezca certeza.
+
+**Parecidos y sesgo demográfico:** el modelo de reconocimiento de face-api (2017) confunde con más facilidad a personas parecidas y a personas de grupos poco representados en su entrenamiento. NIST documentó tasas de falsa coincidencia 10–100 veces mayores en algunos grupos demográficos. Por eso el modelo estadístico incluye un componente de "impostores difíciles" y solo concluye "misma persona" con distancias claramente bajas. Una diferencia verificada en un rasgo estable, como la oreja, debe prevalecer (ver la conclusión integrada). Con calidad del par inferior a 15/100 se declara "calidad insuficiente".
 
 **Calibración con casos propios (opcional):** en la sección "Calibración", carga fotos de identidad conocida similares a las que comparas (una carpeta por persona, o nombres `persona_1.jpg`). El programa recalcula las distribuciones, el EER y los umbrales, y guarda la calibración en el navegador.
 
@@ -55,6 +57,8 @@ Después de comparar aparece una sección para el **juicio del observador**, org
   - **rasgos faciales:** cejas, nariz, labios, mentón, línea del cabello.
 
   Cada rasgo se marca como similar, diferente o no visible, con una nota opcional.
+- **Separación de la oreja (despegue), puntos C–D:** C va donde la oreja se une al cráneo y D en el borde más externo del hélix. Se proyecta sobre el eje transversal de la cara y se estima el ángulo aproximado (normal ≈ 20–40°, despegada > 40°). Solo es comparable con poses casi frontales y parecidas.
+- **Conclusión integrada** (automático + observador), visible junto al resultado y en el reporte. Una diferencia registrada en un rasgo estable (oreja, tatuaje, cicatriz) lleva a "probable exclusión" aunque el sistema automático indique similitud, porque dos personas pueden parecerse, pero una misma persona no cambia la forma ni el despegue de sus orejas.
 - **Conclusión morfológica** automática a partir de lo marcado. Incluida en el reporte con recortes de las orejas. **No modifica** la razón de verosimilitud, porque es un juicio humano sin calibrar.
 
 ¿Por qué el cuello no se mide? Su forma varía con el peso, la postura, la ropa y la edad, así que no identifica a una persona. En cambio, sí se consideran sus marcas particulares.

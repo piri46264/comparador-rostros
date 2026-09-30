@@ -299,3 +299,12 @@ main { padding-top: 20px; padding-bottom: 40px; }
   .visor canvas { height: 300px; }
   .morfo-lista { grid-template-columns: 1fr; }
 }
+
+.conclusion-integrada { display: grid; gap: 2px; border: 2px solid var(--texto-suave); border-radius: 10px; padding: 10px 14px; margin: 4px 0 14px; text-align: left; }
+.conclusion-integrada small { color: var(--texto-suave); font-size: .76rem; text-transform: uppercase; letter-spacing: .04em; }
+.conclusion-integrada b { font-size: 1.05rem; }
+.conclusion-integrada span { font-size: .88rem; }
+.conclusion-integrada[data-nivel="alta"] { border-color: var(--verde); } .conclusion-integrada[data-nivel="alta"] b { color: var(--verde); }
+.conclusion-integrada[data-nivel="media"] { border-color: var(--oliva); } .conclusion-integrada[data-nivel="media"] b { color: var(--oliva); }
+.conclusion-integrada[data-nivel="dudosa"] { border-color: var(--ambar); } .conclusion-integrada[data-nivel="dudosa"] b { color: var(--ambar); }
+.conclusion-integrada[data-nivel="baja"] { border-color: var(--rojo); } .conclusion-integrada[data-nivel="baja"] b { color: var(--rojo); }

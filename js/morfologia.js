@@ -49,7 +49,7 @@
   let visores = {};
 
   function nuevoEstado(img1, img2, r1, r2) {
-    return { img1, img2, r1, r2, clave: claveImagenes(img1, img2), items: {}, notas: {}, lado: '', observador: '', observaciones: '', marcas: { 1: [], 2: [] } };
+    return { img1, img2, r1, r2, clave: claveImagenes(img1, img2), items: {}, notas: {}, lado: '', observador: '', observaciones: '', marcas: { 1: { largo: [], sep: [] }, 2: { largo: [], sep: [] } } };
   }
   const claveImagenes = (a, b) => `${a.nombre}|${a.seleccion}|${a.canvas.width}|${b.nombre}|${b.seleccion}|${b.canvas.width}`;
 
@@ -115,14 +115,17 @@
       if (a === 'rostro') this.irRostro();
       if (a === 'oreja-izq') this.irOreja('izq');
       if (a === 'oreja-der') this.irOreja('der');
-      if (a === 'marcar') { this.modo = this.modo === 'marcar' ? 'mover' : 'marcar'; this.actualizarBotones(); }
-      if (a === 'borrar') { estado.marcas[this.n] = []; this.dibujar(); alCambiar(); }
+      if (a === 'largo' || a === 'sep') { this.modo = this.modo === a ? 'mover' : a; if (this.modo !== 'mover') estado.marcas[this.n][a] = []; this.actualizarBotones(); this.dibujar(); }
+      if (a === 'borrar') { estado.marcas[this.n] = { largo: [], sep: [] }; this.modo = 'mover'; this.actualizarBotones(); this.dibujar(); alCambiar(); }
     }
     actualizarBotones() {
-      const b = $('[data-visor="marcar"]', this.cont);
-      b.classList.toggle('activo', this.modo === 'marcar');
-      b.textContent = this.modo === 'marcar' ? 'Marcando… (clic en la imagen)' : 'Marcar oreja';
-      this.canvas.style.cursor = this.modo === 'marcar' ? 'crosshair' : 'grab';
+      const textos = { largo: ['Largo A–B', 'Clic en A y luego en B…'], sep: ['Separación C–D', 'Clic en C y luego en D…'] };
+      for (const k of ['largo', 'sep']) {
+        const b = $(`[data-visor="${k}"]`, this.cont);
+        b.classList.toggle('activo', this.modo === k);
+        b.textContent = this.modo === k ? textos[k][1] : textos[k][0];
+      }
+      this.canvas.style.cursor = this.modo === 'mover' ? 'grab' : 'crosshair';
     }
     puntos() { return this.img.rostros[this.img.seleccion].landmarks.positions; }
     irRostro() {
@@ -152,9 +155,9 @@
     alSoltar(e) {
       const a = this.arrastre;
       this.arrastre = null;
-      if (!a || a.movido || this.modo !== 'marcar') return;
+      if (!a || a.movido || this.modo === 'mover') return;
       const p = this.aImagen(e);
-      const m = estado.marcas[this.n];
+      const m = estado.marcas[this.n][this.modo];
       if (m.length >= 2) m.length = 0;
       m.push(p);
       if (m.length === 2) { this.modo = 'mover'; this.actualizarBotones(); }
@@ -180,60 +183,87 @@
       const p = this.puntos();
       ctx.strokeStyle = 'rgba(80,170,255,.95)'; ctx.lineWidth = 2 * px;
       ctx.beginPath(); ctx.moveTo(p[27].x, p[27].y); ctx.lineTo(p[33].x, p[33].y); ctx.stroke();
-      // Marcas de la oreja
-      const m = estado.marcas[this.n];
-      ctx.strokeStyle = '#ff9f1a'; ctx.fillStyle = '#ff9f1a'; ctx.lineWidth = 2 * px;
-      if (m.length === 2) { ctx.beginPath(); ctx.moveTo(m[0].x, m[0].y); ctx.lineTo(m[1].x, m[1].y); ctx.stroke(); }
-      m.forEach((q, i) => {
-        ctx.beginPath(); ctx.arc(q.x, q.y, 5 * px, 0, Math.PI * 2); ctx.fill();
-        ctx.font = `bold ${13 * px}px sans-serif`;
-        ctx.fillText(i === 0 ? 'A' : 'B', q.x + 8 * px, q.y - 6 * px);
-      });
+      // Marcas de la oreja: largo (A–B, naranja) y separación (C–D, magenta, proyectada sobre el eje transversal)
+      const dibujarPar = (m, color, etiquetas) => {
+        ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2 * px;
+        if (m.length === 2) { ctx.beginPath(); ctx.moveTo(m[0].x, m[0].y); ctx.lineTo(m[1].x, m[1].y); ctx.stroke(); }
+        m.forEach((q, i) => {
+          ctx.beginPath(); ctx.arc(q.x, q.y, 5 * px, 0, Math.PI * 2); ctx.fill();
+          ctx.font = `bold ${13 * px}px sans-serif`;
+          ctx.fillText(etiquetas[i], q.x + 8 * px, q.y - 6 * px);
+        });
+      };
+      dibujarPar(estado.marcas[this.n].largo, '#ff9f1a', ['A', 'B']);
+      dibujarPar(estado.marcas[this.n].sep, '#ff3dcf', ['C', 'D']);
     }
   }
 
   /* ---------------------------------------------------------------- */
   /* Cálculos                                                          */
   /* ---------------------------------------------------------------- */
+  // Clasificación clínica orientativa del ángulo cefaloauricular (normal ≈ 25–35°, prominente > 40°)
+  const claseSeparacion = (g) => (g < 20 ? 'Pegada' : g <= 40 ? 'Normal' : 'Despegada');
+
   function medicionOreja() {
     if (!estado) return null;
     const medir = (n) => {
-      const m = estado.marcas[n];
-      if (m.length !== 2) return null;
+      const mk = estado.marcas[n];
       const img = n === 1 ? estado.img1 : estado.img2;
       const p = img.rostros[img.seleccion].landmarks.positions;
-      const oreja = dist(m[0], m[1]);
-      return {
-        orejaPx: oreja / img.escala,
-        narizPx: dist(p[27], p[33]) / img.escala,
-        relNariz: oreja / dist(p[27], p[33]),
-        relCara: oreja / dist(p[27], p[8]),
-      };
+      const nariz = dist(p[27], p[33]);
+      const r = { nariz, narizPx: nariz / img.escala };
+      if (mk.largo.length === 2) {
+        const oreja = dist(mk.largo[0], mk.largo[1]);
+        Object.assign(r, { oreja, orejaPx: oreja / img.escala, relNariz: oreja / nariz, relCara: oreja / dist(p[27], p[8]) });
+      }
+      if (mk.sep.length === 2) {
+        // Proyección de C→D sobre el eje transversal de la cara (perpendicular a la línea nasion–mentón)
+        const ux = p[8].x - p[27].x, uy = p[8].y - p[27].y, un = Math.hypot(ux, uy);
+        const vx = -uy / un, vy = ux / un;
+        const proy = Math.abs((mk.sep[1].x - mk.sep[0].x) * vx + (mk.sep[1].y - mk.sep[0].y) * vy);
+        const largo = r.oreja || nariz; // sin largo marcado se usa el canon oreja ≈ nariz
+        r.sepRel = proy / largo;
+        r.sepPx = proy / img.escala;
+        // Ángulo aproximado: vista frontal ≈ ancho de oreja (≈ 0,55 × largo) · sen(ángulo)
+        r.sepGrados = Math.asin(Math.min(1, proy / (0.55 * largo))) * 180 / Math.PI;
+        r.sepClase = claseSeparacion(r.sepGrados);
+        r.sepSinLargo = !r.oreja;
+      }
+      return r;
     };
     const a = medir(1), b = medir(2);
-    if (!a || !b) return { a, b, completa: false };
-    const rel = Math.abs(a.relNariz - b.relNariz) / ((a.relNariz + b.relNariz) / 2);
-    const similitud = 100 * Math.exp(-((rel / (2 * TOL_OREJA)) ** 2));
-    const avisos = [];
+    const res = { a, b, avisos: [] };
     const difGiro = Math.abs(estado.r1.pose.giro - estado.r2.pose.giro);
-    if (difGiro > 0.25) avisos.push('Las fotos tienen giros de cabeza distintos: la proyección de la oreja cambia y la medida es poco fiable.');
-    const difEdad = Math.abs(estado.r1.edad - estado.r2.edad);
-    if (difEdad > 10) avisos.push(`Diferencia de edad estimada de ${difEdad.toFixed(0)} años: la oreja (sobre todo el lóbulo) crece ~0,2 mm por año.`);
-    if (Math.min(a.orejaPx, b.orejaPx) < 30) avisos.push('La oreja mide menos de 30 px en alguna foto: el error de marcado es proporcionalmente grande.');
-    for (const [x, n] of [[a, 1], [b, 2]]) {
-      if (x.relNariz < 0.6 || x.relNariz > 1.7) avisos.push(`Foto ${n}: proporción oreja/nariz inusual (${fmt(x.relNariz)}); revisar que los puntos A y B estén en el extremo superior del hélix y el inferior del lóbulo.`);
+    if (a.oreja && b.oreja) {
+      const rel = Math.abs(a.relNariz - b.relNariz) / ((a.relNariz + b.relNariz) / 2);
+      Object.assign(res, { completa: true, diferencia: rel * 100, similitud: 100 * Math.exp(-((rel / (2 * TOL_OREJA)) ** 2)) });
+      const difEdad = Math.abs(estado.r1.edad - estado.r2.edad);
+      if (difEdad > 10) res.avisos.push(`Diferencia de edad estimada de ${difEdad.toFixed(0)} años: la oreja (sobre todo el lóbulo) crece ~0,2 mm por año.`);
+      if (Math.min(a.orejaPx, b.orejaPx) < 30) res.avisos.push('La oreja mide menos de 30 px en alguna foto: el error de marcado es proporcionalmente grande.');
+      for (const [x, n] of [[a, 1], [b, 2]]) {
+        if (x.relNariz < 0.6 || x.relNariz > 1.7) res.avisos.push(`Foto ${n}: proporción oreja/nariz inusual (${fmt(x.relNariz)}); revisar que A y B estén en el extremo superior del hélix y el inferior del lóbulo.`);
+      }
     }
-    return { a, b, completa: true, diferencia: rel * 100, similitud, avisos };
+    if (a.sepGrados !== undefined && b.sepGrados !== undefined) {
+      const dg = Math.abs(a.sepGrados - b.sepGrados);
+      Object.assign(res, { sepCompleta: true, sepDiferencia: dg, sepSimilitud: 100 * Math.exp(-((dg / 16) ** 2)) });
+      const poseComparable = difGiro <= 0.15 && Math.abs(estado.r1.pose.giro) < 0.3 && Math.abs(estado.r2.pose.giro) < 0.3;
+      res.sepPoseComparable = poseComparable;
+      if (!poseComparable) res.avisos.push('La separación de la oreja depende mucho del giro de la cabeza, y las fotos no tienen una pose frontal comparable: tómala como orientativa.');
+      if (dg >= 15 && poseComparable) res.avisos.push(`La separación de la oreja difiere ~${dg.toFixed(0)}° con poses comparables (${a.sepClase.toLowerCase()} vs ${b.sepClase.toLowerCase()}). Si lo confirmas visualmente, marca "Separación de la cabeza" como Diferente.`);
+      if (a.sepSinLargo || b.sepSinLargo) res.avisos.push('Sin el largo A–B marcado, la separación se calcula con el largo de la nariz como referencia (menos preciso).');
+    }
+    return res;
   }
 
   function resumen() {
     if (!estado) return null;
-    const cuenta = { concordantes: 0, discordantes: 0, unaSola: 0, noVisibles: 0, neutras: 0, evaluados: 0, orejaSimilar: 0, orejaDiferente: 0 };
+    const cuenta = { concordantes: 0, discordantes: 0, discordantesEstables: 0, unaSola: 0, noVisibles: 0, neutras: 0, evaluados: 0, orejaSimilar: 0, orejaDiferente: 0 };
     const filas = RASGOS.map((r) => {
       const v = estado.items[r.clave] || '';
       if (v) cuenta.evaluados++;
       if (v === 'similar' || v === 'coincide') cuenta.concordantes++;
-      if (v === 'diferente' || v === 'nocoincide') cuenta.discordantes++;
+      if (v === 'diferente' || v === 'nocoincide') { cuenta.discordantes++; if (r.grupo !== 'Rasgos faciales') cuenta.discordantesEstables++; }
       if (v === 'solo1' || v === 'solo2') cuenta.unaSola++;
       if (v === 'novisible') cuenta.noVisibles++;
       if (v === 'ninguna') cuenta.neutras++;
@@ -244,7 +274,7 @@
     });
     const oreja = medicionOreja();
     let conclusion, nivel;
-    if (!cuenta.evaluados && !(oreja && oreja.completa)) { conclusion = 'Análisis morfológico no realizado.'; nivel = 'ninguno'; }
+    if (!cuenta.evaluados && !(oreja && (oreja.completa || oreja.sepCompleta))) { conclusion = 'Análisis morfológico no realizado.'; nivel = 'ninguno'; }
     else if (cuenta.discordantes) {
       conclusion = `Se observan ${cuenta.discordantes} diferencia(s) morfológica(s). Una diferencia real en un rasgo estable (por ejemplo, la forma del lóbulo o un tatuaje antiguo) puede bastar para excluir; hay que verificar que no se deba a la pose, la iluminación, la resolución o el paso del tiempo.`;
       nivel = 'baja';
@@ -261,27 +291,35 @@
     if (oreja && oreja.completa && oreja.similitud < 40 && nivel !== 'baja') {
       conclusion += ` La proporción de la oreja difiere un ${fmt(oreja.diferencia, 1)} %; revisar el marcado y la pose.`;
     }
+    if (oreja && oreja.sepCompleta && oreja.sepDiferencia >= 15 && oreja.sepPoseComparable && nivel !== 'baja') {
+      conclusion += ` La separación de la oreja difiere ~${fmt(oreja.sepDiferencia, 0)}° con poses comparables: verificar y, si se confirma, registrarla como diferencia.`;
+    }
     return { filas, cuenta, oreja, conclusion, nivel, lado: estado.lado, observador: estado.observador, observaciones: estado.observaciones, recortes: recortesOreja() };
   }
 
   function recortesOreja() {
     const salida = {};
     for (const n of [1, 2]) {
-      const m = estado.marcas[n];
-      if (m.length !== 2) continue;
+      const mk = estado.marcas[n];
+      const m = mk.largo.length === 2 ? mk.largo : mk.sep.length === 2 ? mk.sep : null;
+      if (!m) continue;
       const img = n === 1 ? estado.img1 : estado.img2;
       const c = document.createElement('canvas'), tam = 220;
       c.width = c.height = tam;
-      const largo = dist(m[0], m[1]), lado = largo * 1.9;
-      const cx = (m[0].x + m[1].x) / 2, cy = (m[0].y + m[1].y) / 2;
+      const largo = Math.max(dist(m[0], m[1]), mk.largo.length === 2 ? dist(mk.largo[0], mk.largo[1]) : 0), lado = largo * 2.1;
+      const todos = [...mk.largo, ...mk.sep], cx = todos.reduce((a, p) => a + p.x, 0) / todos.length, cy = todos.reduce((a, p) => a + p.y, 0) / todos.length;
       const ctx = c.getContext('2d');
       ctx.fillStyle = '#222'; ctx.fillRect(0, 0, tam, tam);
       const s = tam / lado, x0 = cx - lado / 2, y0 = cy - lado / 2;
       ctx.drawImage(img.canvas, x0, y0, lado, lado, 0, 0, tam, tam);
       ctx.strokeStyle = '#ff9f1a'; ctx.fillStyle = '#ff9f1a'; ctx.lineWidth = 2;
-      const q = m.map((p) => ({ x: (p.x - x0) * s, y: (p.y - y0) * s }));
-      ctx.beginPath(); ctx.moveTo(q[0].x, q[0].y); ctx.lineTo(q[1].x, q[1].y); ctx.stroke();
-      q.forEach((p) => { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); });
+      for (const [par, color] of [[mk.largo, '#ff9f1a'], [mk.sep, '#ff3dcf']]) {
+        if (par.length !== 2) continue;
+        ctx.strokeStyle = color; ctx.fillStyle = color;
+        const q = par.map((p) => ({ x: (p.x - x0) * s, y: (p.y - y0) * s }));
+        ctx.beginPath(); ctx.moveTo(q[0].x, q[0].y); ctx.lineTo(q[1].x, q[1].y); ctx.stroke();
+        q.forEach((p) => { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); });
+      }
       salida[n] = c.toDataURL('image/jpeg', 0.9);
     }
     return salida;
@@ -320,14 +358,18 @@
     const r = resumen();
     const o = r.oreja;
     const col = (s) => (s >= 80 ? 'var(--verde)' : s >= 60 ? 'var(--oliva)' : s >= 40 ? 'var(--ambar)' : 'var(--rojo)');
-    const celda = (x) => (x ? `${fmt(x.relNariz, 3)} <small>(${fmt(x.orejaPx, 0)} px)</small>` : '<small>Faltan puntos A y B</small>');
+    const celda = (x) => (x && x.oreja ? `${fmt(x.relNariz, 3)} <small>(${fmt(x.orejaPx, 0)} px)</small>` : '<small>Faltan A y B</small>');
+    const celdaSep = (x) => (x && x.sepGrados !== undefined ? `≈ ${fmt(x.sepGrados, 0)}° <small>${esc(x.sepClase)} · índice ${fmt(x.sepRel, 2)}</small>` : '<small>Faltan C y D</small>');
+    const barraSim = (sim, extra) => `<div class="barra mini"><span style="width:${sim.toFixed(0)}%;background:${col(sim)}"></span></div><b style="color:${col(sim)}">${fmt(sim, 0)} %</b> <small>${extra}</small>`;
     $('#morfo-oreja').innerHTML = `
       <table class="tabla-parametros">
         <thead><tr><th>Medida</th><th>Foto 1</th><th>Foto 2</th><th>Similitud</th></tr></thead>
         <tbody>
-          <tr><td>Largo de oreja / largo de nariz<small>Referencia anatómica ≈ 1,0 en adultos</small></td><td>${celda(o && o.a)}</td><td>${celda(o && o.b)}</td>
-            <td>${o && o.completa ? `<div class="barra mini"><span style="width:${o.similitud.toFixed(0)}%;background:${col(o.similitud)}"></span></div><b style="color:${col(o.similitud)}">${fmt(o.similitud, 0)} %</b> <small>dif. ${fmt(o.diferencia, 1)} %</small>` : '—'}</td></tr>
-          <tr><td>Largo de oreja / altura facial<small>Nasion–mentón</small></td><td>${o && o.a ? fmt(o.a.relCara, 3) : '—'}</td><td>${o && o.b ? fmt(o.b.relCara, 3) : '—'}</td><td></td></tr>
+          <tr><td>Largo de oreja / largo de nariz<small>A–B. Referencia anatómica ≈ 1,0 en adultos</small></td><td>${celda(o && o.a)}</td><td>${celda(o && o.b)}</td>
+            <td>${o && o.completa ? barraSim(o.similitud, `dif. ${fmt(o.diferencia, 1)} %`) : '—'}</td></tr>
+          <tr><td>Largo de oreja / altura facial<small>Nasion–mentón</small></td><td>${o && o.a && o.a.oreja ? fmt(o.a.relCara, 3) : '—'}</td><td>${o && o.b && o.b.oreja ? fmt(o.b.relCara, 3) : '—'}</td><td></td></tr>
+          <tr><td>Separación de la oreja (despegue)<small>C–D. Ángulo aproximado; normal ≈ 20–40°, despegada &gt; 40°</small></td><td>${celdaSep(o && o.a)}</td><td>${celdaSep(o && o.b)}</td>
+            <td>${o && o.sepCompleta ? barraSim(o.sepSimilitud, `dif. ${fmt(o.sepDiferencia, 0)}°${o.sepPoseComparable ? '' : ' · pose no comparable'}`) : '—'}</td></tr>
         </tbody>
       </table>
       ${o && o.avisos && o.avisos.length ? `<ul class="avisos">${o.avisos.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}`;
@@ -376,5 +418,30 @@
     });
   }
 
-  window.Morfologia = { iniciar, preparar, reiniciar, resumen, RASGOS };
+  /**
+   * Conclusión integrada (automático + observador). Criterio FISWG: una diferencia real e
+   * inexplicable en un rasgo estable (oreja, tatuaje, cicatriz) pesa más que una similitud global,
+   * porque dos personas distintas pueden parecerse pero una misma persona no cambia la forma de su oreja.
+   */
+  function integrar(aut, m) {
+    if (!aut || !m || m.nivel === 'ninguno') return null;
+    const c = m.cuenta, l = aut.log10lr;
+    const autoTxt = `el análisis automático resultó «${aut.veredicto.toLowerCase()}»`;
+    if (c.discordantesEstables) {
+      return l <= -2
+        ? { nivel: 'baja', titulo: 'PERSONAS DISTINTAS', detalle: `El análisis automático y el morfológico coinciden (${c.discordantesEstables} diferencia(s) en rasgos estables).` }
+        : { nivel: 'baja', titulo: 'PROBABLE EXCLUSIÓN por diferencias morfológicas', detalle: `El observador registró ${c.discordantesEstables} diferencia(s) en rasgos estables (oreja o marcas particulares). Aunque ${autoTxt}, una diferencia real en un rasgo estable no se explica si fueran la misma persona. Confirmar que no se deba a la pose, la iluminación, la resolución o el paso del tiempo.` };
+    }
+    if (c.discordantes) return { nivel: 'dudosa', titulo: 'NO CONCLUYENTE', detalle: `Diferencias solo en rasgos variables (cejas, labios, cabello…), que pueden cambiar con el tiempo o el arreglo personal; ${autoTxt}.` };
+    if (c.unaSola) return { nivel: 'dudosa', titulo: 'NO CONCLUYENTE hasta explicar las marcas', detalle: `Hay marcas presentes en una sola foto; ${autoTxt}.` };
+    if (m.nivel === 'alta') {
+      if (l >= 2) return { nivel: 'alta', titulo: 'MISMA PERSONA', detalle: 'El análisis automático y el morfológico (incluida la oreja) concuerdan, sin diferencias observadas.' };
+      if (l >= 1) return { nivel: 'media', titulo: 'PROBABLEMENTE LA MISMA PERSONA', detalle: 'La morfología es concordante (incluida la oreja) y el automático se inclina a misma persona sin llegar a ser concluyente.' };
+      if (l <= -2) return { nivel: 'dudosa', titulo: 'NO CONCLUYENTE: discrepancia', detalle: 'La morfología es concordante, pero el análisis automático indica personas distintas. Revisar la calidad de las fotos y la evaluación.' };
+      return { nivel: 'dudosa', titulo: 'NO CONCLUYENTE', detalle: 'La morfología es concordante, pero el análisis automático no es concluyente.' };
+    }
+    return { nivel: aut.nivel, titulo: aut.veredicto.toUpperCase(), detalle: 'El análisis morfológico no registró diferencias, pero es limitado; prevalece el resultado automático.' };
+  }
+
+  window.Morfologia = { iniciar, preparar, reiniciar, resumen, integrar, RASGOS };
 })();

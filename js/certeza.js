@@ -26,6 +26,11 @@
     ancla: { mg: 0.62, sg: 0.10, mi: 0.76, si: 0.09 },
     inflacion: 1.15,
     // Geometría: poder discriminante bajo (EER ≈ 42 %) → aporte a la LR acotado a ×2
+    // Componente de "impostores difíciles" (parecidos entre sí, o de grupos poblacionales poco
+    // representados en el entrenamiento del modelo). NIST FRVT parte 3 (2019) documentó tasas de
+    // falsa coincidencia 10–100 veces mayores en algunos grupos demográficos. Con este componente la
+    // falsa coincidencia en el umbral estándar (0,60) sube ~10 veces respecto de la muestra de calibración.
+    impostorDificil: { mu: 0.58, sigma: 0.07, peso: 0.03 },
     geometria: { genuino: { m: 82.8, s: 10.7 }, impostor: { m: 79.3, s: 9.7 }, lrMax: 2 },
     fuente: 'calibración empírica del programa (2.351 pares misma persona / 21.575 pares distintas, fotos originales y degradadas)',
     validacion: { eerBuena: 0.001, eerMedia: 0.004, eerBaja: 0.012 },
@@ -111,7 +116,24 @@
     return { ...P, fuente };
   }
 
-  const log10LRdist = (d, P) => (logPdf(d, P.mg, P.sg) - logPdf(d, P.mi, P.si)) / Math.LN10;
+  // Densidad de impostores: mezcla del grupo general y del componente de impostores difíciles
+  function logPdfImpostor(d, P) {
+    const H = MODELO_BASE.impostorDificil;
+    const a = Math.log(1 - H.peso) + logPdf(d, P.mi, P.si), b = Math.log(H.peso) + logPdf(d, H.mu, H.sigma);
+    const m = Math.max(a, b);
+    return m + Math.log(Math.exp(a - m) + Math.exp(b - m));
+  }
+  function cdfImpostor(d, P) {
+    const H = MODELO_BASE.impostorDificil;
+    return (1 - H.peso) * Phi((d - P.mi) / P.si) + H.peso * Phi((d - H.mu) / H.sigma);
+  }
+  // Distancia en la que la tasa de falsa coincidencia (CDF de impostores) vale fmr
+  function inversaImpostor(fmr, P) {
+    let lo = 0, hi = 2;
+    for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (cdfImpostor(m, P) < fmr) lo = m; else hi = m; }
+    return (lo + hi) / 2;
+  }
+  const log10LRdist = (d, P) => (logPdf(d, P.mg, P.sg) - logPdfImpostor(d, P)) / Math.LN10;
 
   // Distancia en la que el log10(LR) alcanza un valor objetivo (búsqueda binaria entre las dos medias)
   function distanciaParaLR(objetivo, P) {
@@ -170,7 +192,7 @@
     const certeza = lr / (1 + lr); // probabilidad de misma persona con probabilidad previa neutra (50 %)
 
     // Tasas de error en el valor observado
-    const fmrObservada = Phi((d - P.mi) / P.si);        // P(distancia ≤ d | personas distintas)
+    const fmrObservada = cdfImpostor(d, P);              // P(distancia ≤ d | personas distintas)
     const fnmrObservada = 1 - Phi((d - P.mg) / P.sg);   // P(distancia ≥ d | misma persona)
 
     // Umbrales automáticos (en distancia y en % de similitud biométrica)
@@ -186,7 +208,7 @@
 
     // Tabla de puntos de operación: "si exijo esta similitud, ¿cuánto me equivoco?"
     const puntos = [0.01, 0.001, 0.0001, 0.00001].map((fmr) => {
-      const t = P.mi + P.si * probit(fmr);
+      const t = inversaImpostor(fmr, P);
       return { fmr, distancia: t, similitud: sim(t), fnmr: 1 - Phi((t - P.mg) / P.sg) };
     });
 
@@ -196,9 +218,9 @@
       veredicto = 'CALIDAD INSUFICIENTE para concluir'; nivel = 'dudosa';
     } else if (log10lr >= 3) { veredicto = 'Corresponden a la MISMA PERSONA (apoyo fuerte)'; nivel = 'alta'; }
     else if (log10lr >= 2) { veredicto = 'Muy probablemente la MISMA PERSONA'; nivel = 'alta'; }
-    else if (log10lr >= 1) { veredicto = 'Probablemente la MISMA PERSONA'; nivel = 'media'; }
+    else if (log10lr >= 1) { veredicto = 'NO CONCLUYENTE (inclinación a misma persona)'; nivel = 'dudosa'; }
     else if (log10lr > -1) { veredicto = 'Resultado NO CONCLUYENTE'; nivel = 'dudosa'; }
-    else if (log10lr > -2) { veredicto = 'Probablemente PERSONAS DISTINTAS'; nivel = 'baja'; }
+    else if (log10lr > -2) { veredicto = 'NO CONCLUYENTE (inclinación a personas distintas)'; nivel = 'dudosa'; }
     else { veredicto = 'Corresponden a PERSONAS DISTINTAS'; nivel = 'baja'; }
 
     // Estabilidad: rango de distancias entre las variantes aumentadas de cada rostro

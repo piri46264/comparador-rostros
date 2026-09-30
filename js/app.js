@@ -316,6 +316,11 @@
     $('#porcentaje').textContent = `${fmt(Math.min(99.99, Math.max(0.01, valorMedidor)), decimales)}%`;
     if (!auto) $('#porcentaje').textContent = `${fmt(res.total, 1)}%`;
     $('#medidor-etiqueta').textContent = auto ? 'certeza' : 'similitud';
+    if (auto && Math.abs(aut.log10lr) < 2) {
+      // Sin conclusión: se muestra la fuerza de la evidencia (LR), no una probabilidad que parezca certeza
+      $('#porcentaje').textContent = `LR ${fmtLR(aut.log10lr)}`;
+      $('#medidor-etiqueta').textContent = 'no concluyente';
+    }
     $('#porcentaje').classList.toggle('largo', $('#porcentaje').textContent.length > 5);
     $('#veredicto').textContent = auto ? aut.veredicto : res.veredicto;
     $('#detalle-veredicto').innerHTML = auto
@@ -352,8 +357,18 @@
         <td>${p.similitud === null ? '<small>Referencia</small>' : `<div class="barra mini"><span style="width:${p.similitud.toFixed(1)}%;background:${colorSim(p.similitud)}"></span></div><b style="color:${colorSim(p.similitud)}">${fmt(p.similitud, 0)} %</b>`}</td>
       </tr>`).join('');
 
-    Morfologia.preparar(estado.fotos[1], estado.fotos[2], r1, r2);
+    Morfologia.preparar(estado.fotos[1], estado.fotos[2], r1, r2, actualizarIntegrada);
+    actualizarIntegrada();
     if (desplazar) seccion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function actualizarIntegrada() {
+    const caja = $('#conclusion-integrada');
+    const ci = estado.ultimo && Morfologia.integrar(estado.ultimo.aut, Morfologia.resumen());
+    caja.hidden = !ci;
+    if (!ci) return;
+    caja.dataset.nivel = ci.nivel;
+    caja.innerHTML = `<small>Conclusión integrada (automático + análisis morfológico)</small><b>${esc(ci.titulo)}</b><span>${esc(ci.detalle)}</span>`;
   }
 
   /* ---------------- Reporte ---------------- */
@@ -362,7 +377,10 @@
     return `reporte_comparacion_${base(estado.ultimo.img1.nombre)}_vs_${base(estado.ultimo.img2.nombre)}.${ext}`;
   }
 
-  const htmlReporte = () => GeneradorReporte.generarHTML({ ...estado.ultimo, morfologia: Morfologia.resumen() });
+  const htmlReporte = () => {
+    const morfologia = Morfologia.resumen();
+    return GeneradorReporte.generarHTML({ ...estado.ultimo, morfologia, integrada: Morfologia.integrar(estado.ultimo.aut, morfologia) });
+  };
 
   function descargarHTML() {
     if (!estado.ultimo) return;

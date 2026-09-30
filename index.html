@@ -96,6 +96,7 @@
         <div class="veredicto-caja">
           <p id="veredicto" class="veredicto"></p>
           <p id="detalle-veredicto" class="detalle"></p>
+          <div id="conclusion-integrada" class="conclusion-integrada" hidden></div>
           <ul id="avisos-resultado" class="avisos"></ul>
           <div class="acciones">
             <button id="btn-ver" class="btn primario">Ver reporte</button>
@@ -137,7 +138,8 @@
           </div>
           <canvas></canvas>
           <div class="visor-barra">
-            <button type="button" class="btn pequeno" data-visor="marcar">Marcar oreja</button>
+            <button type="button" class="btn pequeno" data-visor="largo">Largo A–B</button>
+            <button type="button" class="btn pequeno" data-visor="sep">Separación C–D</button>
             <button type="button" class="btn pequeno" data-visor="borrar">Borrar puntos</button>
           </div>
         </div>
@@ -152,7 +154,8 @@
           </div>
           <canvas></canvas>
           <div class="visor-barra">
-            <button type="button" class="btn pequeno" data-visor="marcar">Marcar oreja</button>
+            <button type="button" class="btn pequeno" data-visor="largo">Largo A–B</button>
+            <button type="button" class="btn pequeno" data-visor="sep">Separación C–D</button>
             <button type="button" class="btn pequeno" data-visor="borrar">Borrar puntos</button>
           </div>
         </div>
@@ -160,7 +163,7 @@
       <div class="acciones morfo-acciones"><button type="button" class="btn pequeno" id="morfo-sincronizar">Centrar ambos rostros</button></div>
 
       <h4>Medición de la oreja</h4>
-      <p class="nota-mini">En cada foto pulsa <b>Marcar oreja</b> y haz clic en el <b>punto A</b> (borde superior del hélix) y en el <b>punto B</b> (borde inferior del lóbulo). La línea azul es el largo de la nariz, que se usa como referencia: así la medida no depende del tamaño de la foto. Compara la misma oreja en ambas fotos.</p>
+      <p class="nota-mini">Compara la <b>misma oreja</b> en ambas fotos. <b>Largo A–B</b>: clic en el borde superior del hélix (A) y en el borde inferior del lóbulo (B). <b>Separación C–D</b>: clic donde la oreja se une a la cabeza, en el contorno del cráneo (C), y en el punto más externo del hélix (D); se mide la distancia horizontal respecto del eje de la cara, que indica cuánto se despega la oreja. La línea azul es el largo de la nariz, usado como referencia de escala. La separación solo es comparable entre fotos con una pose parecida y casi frontal.</p>
       <div class="morfo-campos">
         <label>Oreja comparada
           <select id="morfo-lado">
