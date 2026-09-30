@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Comparador de Rostros</title>
+  <meta name="description" content="Compara dos fotografías de rostros en el navegador y genera un reporte de similitud. Las imágenes no salen de tu equipo.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d3557'/%3E%3Ccircle cx='32' cy='28' r='13' fill='none' stroke='%23fff' stroke-width='4'/%3E%3Cpath d='M14 54c3-9 10-13 18-13s15 4 18 13' fill='none' stroke='%23fff' stroke-width='4'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+  <header class="cabecera">
+    <div class="contenedor cabecera-fila">
+      <div>
+        <h1>Comparador de Rostros</h1>
+        <p class="subtitulo">Análisis biométrico de dos fotografías con reporte detallado</p>
+      </div>
+      <div class="insignia" title="Todo el procesamiento ocurre en tu navegador">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.6 8 11 4.6-1.4 8-6 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 4.9-4.9 1.4 1.4-6.3 6.3Z"/></svg>
+        100 % local · las imágenes no se envían a ningún servidor
+      </div>
+    </div>
+  </header>
+
+  <main class="contenedor">
+    <section id="estado-modelos" class="estado" role="status" aria-live="polite">
+      <div class="estado-texto">Cargando modelos de reconocimiento facial…</div>
+      <div class="progreso"><span id="progreso-modelos"></span></div>
+    </section>
+
+    <section class="paneles">
+      <article class="panel" data-foto="1">
+        <h2><span class="num">1</span> Foto 1</h2>
+        <label class="zona-carga" tabindex="0">
+          <input type="file" accept="image/*" hidden>
+          <div class="zona-vacia">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 7v2.99s-1.99.01-2 0V7h-3s.01-1.99 0-2h3V2h2v3h3v2h-3Zm-3 4V8h-3V5H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-8h-3ZM5 19l3-4 2 3 3-4 4 5H5Z"/></svg>
+            <b>Haz clic o arrastra una imagen aquí</b>
+            <small>También puedes pegarla con Ctrl + V · JPG, PNG, WEBP…</small>
+          </div>
+          <canvas class="vista" hidden></canvas>
+        </label>
+        <div class="info-archivo" hidden></div>
+        <div class="selector-rostros" hidden></div>
+      </article>
+
+      <article class="panel" data-foto="2">
+        <h2><span class="num">2</span> Foto 2</h2>
+        <label class="zona-carga" tabindex="0">
+          <input type="file" accept="image/*" hidden>
+          <div class="zona-vacia">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 7v2.99s-1.99.01-2 0V7h-3s.01-1.99 0-2h3V2h2v3h3v2h-3Zm-3 4V8h-3V5H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-8h-3ZM5 19l3-4 2 3 3-4 4 5H5Z"/></svg>
+            <b>Haz clic o arrastra una imagen aquí</b>
+            <small>También puedes pegarla con Ctrl + V · JPG, PNG, WEBP…</small>
+          </div>
+          <canvas class="vista" hidden></canvas>
+        </label>
+        <div class="info-archivo" hidden></div>
+        <div class="selector-rostros" hidden></div>
+      </article>
+    </section>
+
+    <section class="controles">
+      <div class="umbral">
+        <label for="umbral">Umbral de coincidencia: <b id="umbral-valor">60 %</b></label>
+        <input id="umbral" type="range" min="40" max="90" step="1" value="60">
+        <small>Porcentaje mínimo de similitud global para concluir que es la misma persona. Súbelo para ser más estricto.</small>
+      </div>
+      <div class="acciones">
+        <button id="btn-comparar" class="btn primario" disabled>Comparar rostros</button>
+        <button id="btn-limpiar" class="btn">Limpiar</button>
+      </div>
+    </section>
+
+    <section id="resultado" class="resultado" hidden>
+      <div class="resultado-cabecera">
+        <div class="medidor">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle cx="60" cy="60" r="52" class="medidor-fondo"/>
+            <circle cx="60" cy="60" r="52" class="medidor-valor" id="medidor-arco"/>
+          </svg>
+          <div class="medidor-texto"><b id="porcentaje">0%</b><small>similitud</small></div>
+        </div>
+        <div class="veredicto-caja">
+          <p id="veredicto" class="veredicto"></p>
+          <p id="detalle-veredicto" class="detalle"></p>
+          <ul id="avisos-resultado" class="avisos"></ul>
+          <div class="acciones">
+            <button id="btn-ver" class="btn primario">Ver reporte</button>
+            <button id="btn-pdf" class="btn">Imprimir / guardar PDF</button>
+            <button id="btn-html" class="btn">Descargar HTML</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="componentes" id="componentes"></div>
+
+      <div class="rostros-analizados" id="rostros-analizados"></div>
+
+      <h3>Comparación por parámetro</h3>
+      <div class="tabla-envoltorio">
+        <table class="tabla-parametros">
+          <thead><tr><th>Parámetro</th><th>Foto 1</th><th>Foto 2</th><th>Similitud</th></tr></thead>
+          <tbody id="tabla-parametros"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="descargo">Herramienta orientativa: el resultado es probabilístico y no reemplaza un peritaje de identificación facial.</p>
+  </main>
+
+  <dialog id="dialogo-reporte" class="dialogo">
+    <div class="dialogo-barra">
+      <b>Reporte de comparación</b>
+      <div class="acciones">
+        <button class="btn" data-accion="pdf">Imprimir / PDF</button>
+        <button class="btn" data-accion="html">Descargar HTML</button>
+        <button class="btn" data-accion="cerrar" aria-label="Cerrar">✕</button>
+      </div>
+    </div>
+    <iframe id="marco-reporte" title="Reporte"></iframe>
+  </dialog>
+
+  <div id="toast" class="toast" role="alert" hidden></div>
+
+  <script src="vendor/face-api.js"></script>
+  <script src="modelos/ssd_mobilenetv1_model.js"></script>
+  <script src="modelos/face_landmark_68_model.js"></script>
+  <script src="modelos/face_recognition_model.js"></script>
+  <script src="modelos/age_gender_model.js"></script>
+  <script src="modelos/face_expression_model.js"></script>
+  <script src="js/modelos.js"></script>
+  <script src="js/analisis.js"></script>
+  <script src="js/reporte.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
