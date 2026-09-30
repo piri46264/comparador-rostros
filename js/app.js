@@ -58,6 +58,7 @@
       img.analisis = {};
       estado.fotos[n] = img;
       $('#resultado').hidden = true;
+      Morfologia.reiniciar();
       dibujarVista(n);
       mostrarInfo(n);
       if (estado.modelosListos) await detectar(n);
@@ -160,6 +161,7 @@
     if (!img || !img.rostros || i === img.seleccion) return;
     img.seleccion = i;
     $('#resultado').hidden = true;
+    Morfologia.reiniciar();
     dibujarVista(n);
     mostrarInfo(n);
   }
@@ -350,6 +352,7 @@
         <td>${p.similitud === null ? '<small>Referencia</small>' : `<div class="barra mini"><span style="width:${p.similitud.toFixed(1)}%;background:${colorSim(p.similitud)}"></span></div><b style="color:${colorSim(p.similitud)}">${fmt(p.similitud, 0)} %</b>`}</td>
       </tr>`).join('');
 
+    Morfologia.preparar(estado.fotos[1], estado.fotos[2], r1, r2);
     if (desplazar) seccion.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -359,7 +362,7 @@
     return `reporte_comparacion_${base(estado.ultimo.img1.nombre)}_vs_${base(estado.ultimo.img2.nombre)}.${ext}`;
   }
 
-  const htmlReporte = () => GeneradorReporte.generarHTML(estado.ultimo);
+  const htmlReporte = () => GeneradorReporte.generarHTML({ ...estado.ultimo, morfologia: Morfologia.resumen() });
 
   function descargarHTML() {
     if (!estado.ultimo) return;
@@ -410,6 +413,7 @@
     }
     estado.ultimo = null;
     $('#resultado').hidden = true;
+    Morfologia.reiniciar();
     actualizarBoton();
   }
 
@@ -502,6 +506,7 @@
   /* ---------------- Eventos ---------------- */
   configurarPanel(1);
   configurarPanel(2);
+  Morfologia.iniciar();
   $('#btn-comparar').addEventListener('click', comparar);
   $('#btn-limpiar').addEventListener('click', limpiar);
   $('#btn-ver').addEventListener('click', verReporte);

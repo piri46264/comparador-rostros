@@ -121,6 +121,67 @@
       </div>
     </section>
 
+    <section id="morfologia" class="resultado morfologia" hidden>
+      <h3>Análisis morfológico asistido y orejas <small>(observador, criterios FISWG)</small></h3>
+      <p class="nota-mini">Compara visualmente cada rasgo y registra tu juicio. Esto va al reporte como un análisis complementario y <b>no modifica</b> el resultado automático. Rueda del mouse o botones para el zoom; arrastra para moverte.</p>
+
+      <div class="visores">
+        <div class="visor" id="visor-1">
+          <div class="visor-barra"><b>Foto 1</b>
+            <button type="button" class="btn pequeno" data-visor="rostro">Rostro</button>
+            <button type="button" class="btn pequeno" data-visor="oreja-izq">Oreja ◂</button>
+            <button type="button" class="btn pequeno" data-visor="oreja-der">Oreja ▸</button>
+            <button type="button" class="btn pequeno" data-visor="mas" aria-label="Acercar">＋</button>
+            <button type="button" class="btn pequeno" data-visor="menos" aria-label="Alejar">－</button>
+            <button type="button" class="btn pequeno" data-visor="ajustar">Ajustar</button>
+          </div>
+          <canvas></canvas>
+          <div class="visor-barra">
+            <button type="button" class="btn pequeno" data-visor="marcar">Marcar oreja</button>
+            <button type="button" class="btn pequeno" data-visor="borrar">Borrar puntos</button>
+          </div>
+        </div>
+        <div class="visor" id="visor-2">
+          <div class="visor-barra"><b>Foto 2</b>
+            <button type="button" class="btn pequeno" data-visor="rostro">Rostro</button>
+            <button type="button" class="btn pequeno" data-visor="oreja-izq">Oreja ◂</button>
+            <button type="button" class="btn pequeno" data-visor="oreja-der">Oreja ▸</button>
+            <button type="button" class="btn pequeno" data-visor="mas" aria-label="Acercar">＋</button>
+            <button type="button" class="btn pequeno" data-visor="menos" aria-label="Alejar">－</button>
+            <button type="button" class="btn pequeno" data-visor="ajustar">Ajustar</button>
+          </div>
+          <canvas></canvas>
+          <div class="visor-barra">
+            <button type="button" class="btn pequeno" data-visor="marcar">Marcar oreja</button>
+            <button type="button" class="btn pequeno" data-visor="borrar">Borrar puntos</button>
+          </div>
+        </div>
+      </div>
+      <div class="acciones morfo-acciones"><button type="button" class="btn pequeno" id="morfo-sincronizar">Centrar ambos rostros</button></div>
+
+      <h4>Medición de la oreja</h4>
+      <p class="nota-mini">En cada foto pulsa <b>Marcar oreja</b> y haz clic en el <b>punto A</b> (borde superior del hélix) y en el <b>punto B</b> (borde inferior del lóbulo). La línea azul es el largo de la nariz, que se usa como referencia: así la medida no depende del tamaño de la foto. Compara la misma oreja en ambas fotos.</p>
+      <div class="morfo-campos">
+        <label>Oreja comparada
+          <select id="morfo-lado">
+            <option value="">Sin indicar</option>
+            <option value="derecha">Derecha (de la persona)</option>
+            <option value="izquierda">Izquierda (de la persona)</option>
+            <option value="ambas">Ambas</option>
+          </select>
+        </label>
+        <label>Observador <input type="text" id="morfo-observador" placeholder="Nombre de quien evalúa"></label>
+      </div>
+      <div id="morfo-oreja" class="tabla-envoltorio"></div>
+
+      <h4>Lista de verificación morfológica</h4>
+      <div id="morfo-lista" class="morfo-lista"></div>
+      <label class="morfo-obs">Observaciones generales
+        <textarea id="morfo-observaciones" rows="3" placeholder="Ej.: la foto 2 es 10 años posterior; el lóbulo izquierdo presenta una perforación en ambas fotos…"></textarea>
+      </label>
+      <div id="morfo-resumen" class="morfo-resumen"></div>
+    </section>
+
     <details class="calibracion" id="seccion-calibracion">
       <summary>Calibración con casos propios <small>(avanzado, opcional)</small></summary>
       <div class="calibracion-cuerpo">
@@ -163,6 +224,7 @@
   <script src="js/modelos.js"></script>
   <script src="js/analisis.js"></script>
   <script src="js/certeza.js"></script>
+  <script src="js/morfologia.js"></script>
   <script src="js/reporte.js"></script>
   <script src="js/app.js"></script>
 </body>

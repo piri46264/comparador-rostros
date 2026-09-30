@@ -43,6 +43,22 @@ Decisión automática: *misma persona* si LR ≥ 100, *personas distintas* si LR
 - **TTA (aumentación en tiempo de prueba):** el descriptor se promedia sobre la imagen original, su espejo y su versión ecualizada, lo que reduce el efecto de la iluminación y de la asimetría de pose. El rango entre variantes se informa como *estabilidad*.
 - **Geometría como evidencia secundaria:** la geometría aporta a la LR con un peso acotado (máx. ×5), porque es una evidencia débil frente al descriptor.
 
+### Análisis morfológico asistido y orejas
+
+Después de comparar aparece una sección para el **juicio del observador**, organizada según los componentes faciales de FISWG:
+
+- **Visores lado a lado** con zoom (rueda del mouse o botones), desplazamiento (arrastrar) y accesos directos al rostro y a cada oreja.
+- **Medición de la oreja:** marcas 2 puntos en cada foto (A = borde superior del hélix, B = borde inferior del lóbulo). El largo se expresa como proporción del **largo de la nariz**, cuyo canon anatómico es ≈ 1,0, y de la altura facial, así que no depende de la escala de la foto. Hay avisos cuando la pose difiere, cuando hay una diferencia grande de edad (la oreja crece unos 0,2 mm por año) o cuando la oreja es muy pequeña.
+- **Lista de verificación:**
+  - **oreja:** forma, hélix, antihélix, trago, concha, lóbulo, separación de la cabeza y marcas;
+  - **marcas particulares** en cuello y cara: tatuajes, cicatrices, lunares;
+  - **rasgos faciales:** cejas, nariz, labios, mentón, línea del cabello.
+
+  Cada rasgo se marca como similar, diferente o no visible, con una nota opcional.
+- **Conclusión morfológica** automática a partir de lo marcado. Incluida en el reporte con recortes de las orejas. **No modifica** la razón de verosimilitud, porque es un juicio humano sin calibrar.
+
+¿Por qué el cuello no se mide? Su forma varía con el peso, la postura, la ropa y la edad, así que no identifica a una persona. En cambio, sí se consideran sus marcas particulares.
+
 ### Modo manual
 
 Veredictos: **alta probabilidad** (≥ umbral + 20), **probable** (≥ umbral), **no concluyente** (entre umbral − 15 y el umbral) y **personas distintas** (por debajo).
@@ -58,6 +74,7 @@ index.html                 Interfaz
 css/estilos.css            Estilos (responsivo, modo claro/oscuro)
 js/modelos.js              Carga de modelos incrustados (compatible con file://)
 js/certeza.js              Modo automático: calidad, LR, umbrales y calibración
+js/morfologia.js           Análisis morfológico asistido (FISWG) y medición de la oreja
 js/analisis.js             Detección, parámetros faciales y comparación
 js/reporte.js              Generación del reporte HTML/PDF
 js/app.js                  Lógica de la interfaz
